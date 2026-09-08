@@ -1,7 +1,13 @@
-markdowns/*
-venv
+markdowns/
+venv/
+__pycache__/
 *.pyc
-*/__pycache__/
+.env
+data/
+checkpoints/
+*.db
+*.bundle
+
 
 
 
