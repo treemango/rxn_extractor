@@ -1,0 +1,11 @@
+{
+    "last_index": 3,
+    "timestamp": "2026-09-03T10:56:36.947559",
+    "domain_name": "default",
+    "stats": {
+        "processed": 3,
+        "successful": 3,
+        "failed": 0,
+        "total_experiments": 0
+    }
+}

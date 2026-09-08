@@ -1,0 +1,7 @@
+markdowns/*
+venv
+*.pyc
+*/__pycache__/
+
+
+
