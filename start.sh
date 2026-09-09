@@ -70,14 +70,25 @@ case "$ACTION" in
         echo "=================================================="
         exec "$VENV_PYTHON" run_batch.py "$@"
         ;;
+    convert)
+        shift || true
+        echo "=================================================="
+        echo "[INFO] Converting PDFs in pdfs/ → markdowns/"
+        echo "[INFO] Skipping PDFs whose .md already exists."
+        echo "[NOTE] First run downloads ~1.5GB of layout models."
+        echo "=================================================="
+        exec "$VENV_PYTHON" -m src.pipeline.pdf_converter "$@"
+        ;;
     build)
         echo "[INFO] Build completed successfully."
         ;;
     *)
-        echo "Usage: $0 [ui|batch|build]"
-        echo "  ui     : Launch the HITL FastAPI web dashboard (default)"
-        echo "  batch  : Run the batch extraction pipeline (e.g., ./start.sh batch --limit 5)"
-        echo "  build  : Only compile models, prompts, and UI from reaction.yaml"
+        echo "Usage: $0 [ui|batch|convert|build]"
+        echo "  ui      : Launch the HITL FastAPI web dashboard (default)"
+        echo "  batch   : Run the batch extraction pipeline (e.g., ./start.sh batch --limit 5)"
+        echo "  convert : Convert PDFs in pdfs/ to Markdown in markdowns/"
+        echo "            (e.g., ./start.sh convert --force  to re-convert existing files)"
+        echo "  build   : Only compile models, prompts, and UI from reaction.yaml"
         exit 1
         ;;
 esac

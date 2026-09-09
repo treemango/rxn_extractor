@@ -24,7 +24,11 @@ class OllamaConfig:
     OLLAMA_PORT = os.getenv("OLLAMA_PORT", "11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b-instruct-q4_K_M")
     OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))
-    
+    # Context window: 32768 tokens is safe on 60GB RAM for both 7B and 14B models.
+    # 14B model: ~9GB weights + ~8GB KV cache at 32K ctx = ~17GB total, well within 60GB.
+    # Covers papers up to ~25,000 words (~32,000 tokens). Increase to 65536 if needed.
+    OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
+
     MODEL_PRESETS = {
         "qwen2.5-7b": "qwen2.5:7b-instruct-q4_K_M",
         "qwen2.5-14b": "qwen2.5:14b-instruct-q4_K_M",

@@ -13,10 +13,11 @@ T = TypeVar("T", bound=BaseModel)
 class LLMClient:
     """Ollama LLM client using /api/chat with JSON mode."""
 
-    def __init__(self, base_url: str, model: str, timeout: int):
+    def __init__(self, base_url: str, model: str, timeout: int, num_ctx: int = 32768):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self.num_ctx = num_ctx
         self.client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
         self._validate_connection()
 
@@ -97,7 +98,10 @@ class LLMClient:
                     "messages": messages,
                     "stream": False,
                     "format": "json",  # forces valid JSON output from Ollama
-                    "options": {"temperature": temperature},
+                    "options": {
+                        "temperature": temperature,
+                        "num_ctx": self.num_ctx,  # override Ollama's default 2048 truncation
+                    },
                 }
                 response = self.client.post("/api/chat", json=payload)
                 response.raise_for_status()
@@ -130,11 +134,13 @@ def get_llm_client() -> LLMClient:
             base_url = ollama_config.base_url
             model    = ollama_config.OLLAMA_MODEL
             timeout  = ollama_config.OLLAMA_TIMEOUT
+            num_ctx  = ollama_config.OLLAMA_NUM_CTX
         except Exception:
             base_url = "http://localhost:11434"
             model    = "qwen2.5:14b-instruct-q4_K_M"
             timeout  = 180
-        _client = LLMClient(base_url=base_url, model=model, timeout=timeout)
+            num_ctx  = 32768
+        _client = LLMClient(base_url=base_url, model=model, timeout=timeout, num_ctx=num_ctx)
     return _client
 
 
