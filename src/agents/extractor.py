@@ -97,17 +97,50 @@ class Extractor:
         if not parser_output or not hasattr(parser_output, 'experiments'):
             return []
 
+        total = len(parser_output.experiments)
         results = []
         for i, experiment in enumerate(parser_output.experiments):
-            # ExperimentMetadata has no full text — use the full paper content
-            # enriched with the brief_description as context hint
-            brief = getattr(experiment, 'brief_description', '')
-            key_params = getattr(experiment, 'key_parameters', '')
-            context_hint = f"Experiment {i+1}: {brief}. Key parameters: {key_params}"
-            exp_text = f"{context_hint}\n\n---\n\n{paper_content}"
 
-            result = self.extract_experiment(exp_text, paper_id, i + 1)
+            # ── Build a rich, surgical context block for subdomain agents ─────
+            # Each field was extracted by the parser — use them as precise pointers
+            # so subdomain agents don't have to search the entire 12,000-token paper.
+            exp_num     = getattr(experiment, 'experiment_number', i + 1)
+            brief       = getattr(experiment, 'brief_description', '') or ''
+            catalyst    = getattr(experiment, 'catalyst_name', None) or 'not specified'
+            reactant    = getattr(experiment, 'reactant', None) or 'not specified'
+            temp        = getattr(experiment, 'main_temperature', None) or 'not specified'
+            pressure    = getattr(experiment, 'main_pressure', None) or 'not specified'
+            products    = getattr(experiment, 'products_mentioned', None) or 'not specified'
+            key_section = getattr(experiment, 'key_section', None) or 'see full paper below'
+            key_params  = getattr(experiment, 'key_parameters', '') or ''
+
+            context_hint = (
+                f"{'='*60}\n"
+                f"TARGET EXPERIMENT: #{exp_num} of {total}\n"
+                f"{'='*60}\n"
+                f"Description    : {brief}\n"
+                f"Catalyst/System: {catalyst}\n"
+                f"Reactant       : {reactant}\n"
+                f"Temperature    : {temp}\n"
+                f"Pressure       : {pressure}\n"
+                f"Products noted : {products}\n"
+                f"Paper location : {key_section}\n"
+                f"Key parameters : {key_params}\n"
+                f"{'='*60}\n"
+                f"CRITICAL INSTRUCTIONS:\n"
+                f"  1. Extract data ONLY for the experiment described above.\n"
+                f"  2. If the paper contains multiple experiments, IGNORE all others.\n"
+                f"  3. Focus especially on the section/table referenced in 'Paper location'.\n"
+                f"  4. If a field is not mentioned for THIS specific experiment, return null.\n"
+                f"  5. Never mix values from a different experiment into this one.\n"
+                f"{'='*60}\n"
+                f"\nFULL PAPER TEXT (for reference):\n"
+            )
+            exp_text = f"{context_hint}{paper_content}"
+
+            result = self.extract_experiment(exp_text, paper_id, exp_num)
             if result:
                 results.append(result)
 
         return results
+
