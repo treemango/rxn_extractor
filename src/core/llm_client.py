@@ -64,6 +64,33 @@ class LLMClient:
             logger.error(f"Unexpected error connecting to Ollama: {e}")
             sys.exit(1)
 
+        # Execute a quick health check to force the model into RAM and verify inference
+        logger.info(f"Sending a simple health-check prompt to verify inference...")
+        try:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "user", 
+                        "content": "Hello! Please reply with exactly the word 'READY' and nothing else."
+                    }
+                ],
+                "stream": False,
+                # Use a tiny context for the health check to minimize overhead,
+                # but use the full configured timeout to allow for the slow HDD load.
+                "options": {"num_ctx": 512, "temperature": 0.1} 
+            }
+            response = self.client.post("/api/chat", json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            reply = response.json()["message"]["content"].strip()
+            logger.info(f"✓ Health check passed. Model replied: '{reply}'")
+        except httpx.TimeoutException:
+            logger.error(f"  ✗ Health check timed out after {self.timeout}s.")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"  ✗ Health check failed. Inference error: {e}")
+            sys.exit(1)
+
     @staticmethod
     def _extract_json(text: str) -> dict:
         """4-tier JSON recovery strategy."""
@@ -163,7 +190,27 @@ class LLMClient:
                     f"{content}\n"
                     f"{'─'*60}"
                 )
-                result = response_model(**self._extract_json(content))
+                parsed = self._extract_json(content)
+
+                # Guard: check if the model returned a completely wrong structure.
+                # If NONE of the expected fields are present, the model ignored the
+                # schema entirely (e.g. returned abstract/keywords/references).
+                # Treat this as a failed attempt so the retry ladder kicks in.
+                expected_keys = set(response_model.model_fields.keys())
+                returned_keys = set(parsed.keys())
+                if not expected_keys.intersection(returned_keys):
+                    wrong_keys = list(returned_keys)[:5]  # show first 5 wrong keys
+                    logger.warning(
+                        f"  ✗ Attempt {attempt}: Model returned wrong JSON structure.\n"
+                        f"    Expected keys like: {list(expected_keys)[:5]}\n"
+                        f"    Got keys: {wrong_keys}\n"
+                        f"    The model likely summarized the paper instead of extracting experiments.\n"
+                        f"    Retrying with higher temperature..."
+                    )
+                    temperature = round(temperature + self.temperature_increment, 2)
+                    continue
+
+                result = response_model(**parsed)
                 logger.info(f"  ✓ Attempt {attempt}: Parsed successfully.")
                 return result
             except json.JSONDecodeError as e:
