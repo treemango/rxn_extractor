@@ -1,11 +1,15 @@
 PARSER_USER_TEMPLATE = """
-Please extract experiments from the following paper content:
+Read the following research paper and identify all distinct experiments.
+Return your answer as a JSON object following the schema shown in your instructions.
 
+PAPER CONTENT:
 {paper_content}
 """
 
 SUBDOMAIN_USER_TEMPLATE = """
-Please extract data from the following experiment description:
+Extract the requested data for the specific experiment described below.
+Return your answer as a JSON object following the schema shown in your instructions.
 
+EXPERIMENT CONTEXT AND FULL PAPER:
 {experiment_text}
 """

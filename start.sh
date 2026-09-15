@@ -31,10 +31,17 @@ fi
 VENV_PYTHON="$SCRIPT_DIR/venv/bin/python"
 VENV_PIP="$SCRIPT_DIR/venv/bin/pip"
 
-# 3. Dependency Installation
-echo "[INFO] Installing dependencies into ./venv..."
-"$VENV_PIP" install --upgrade pip
-"$VENV_PIP" install -r requirements.txt
+# 3. Dependency Installation — only run when requirements.txt has changed
+DEPS_MARKER="$SCRIPT_DIR/venv/.deps_installed"
+if [ ! -f "$DEPS_MARKER" ] || [ "$SCRIPT_DIR/requirements.txt" -nt "$DEPS_MARKER" ]; then
+    echo "[INFO] Installing / updating dependencies (this may take a while on first run)..."
+    "$VENV_PIP" install --upgrade pip --quiet
+    "$VENV_PIP" install -r requirements.txt --quiet
+    touch "$DEPS_MARKER"
+    echo "[INFO] Dependencies ready."
+else
+    echo "[INFO] Dependencies already up to date. Skipping install."
+fi
 
 # 4. Check for reaction.yaml (single source of truth)
 if [ ! -f "reaction.yaml" ]; then

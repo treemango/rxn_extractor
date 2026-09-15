@@ -147,17 +147,31 @@ class BatchManager:
                         content, paper_id, self.parser_agent
                     )
 
-                    for exp_idx, exp_data in enumerate(results):
-                        self._store_experiment(
-                            paper_id, identifier, exp_idx + 1, exp_data
-                        )
-                        stats["total_experiments"] += 1
+                    if results:
+                        for exp_idx, exp_data in enumerate(results):
+                            self._store_experiment(
+                                paper_id, identifier, exp_idx + 1, exp_data
+                            )
+                            stats["total_experiments"] += 1
 
-                    self.store.update_paper_status(paper_id, "processed")
-                    stats["successful"] += 1
-                    logger.info(
-                        f"✓ {identifier}: {len(results)} experiments extracted"
-                    )
+                        self.store.update_paper_status(paper_id, "processed")
+                        stats["successful"] += 1
+                        logger.info(
+                            f"✓ {identifier}: {len(results)} experiments extracted"
+                        )
+                    else:
+                        # Parser found 0 experiments (e.g. computational/theoretical paper
+                        # or LLM connection failed). Record it but don't count as success.
+                        self.store.update_paper_status(
+                            paper_id, "no_experiments",
+                            "Parser returned 0 experiments. "
+                            "Paper may be theoretical/computational, or the LLM could not be reached."
+                        )
+                        stats["failed"] += 1
+                        logger.warning(
+                            f"⚠ {identifier}: 0 experiments extracted — "
+                            "check if the paper has physical experiments and that Ollama is running."
+                        )
 
                 except Exception as e:
                     logger.error(
