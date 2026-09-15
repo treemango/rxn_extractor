@@ -44,7 +44,13 @@ class Extractor:
             logger.error(f"Model class {class_name} not found: {e}")
             raise
 
-    def extract_experiment(self, experiment_text: str, paper_id: int, experiment_id: int) -> Dict[str, Any]:
+    def extract_experiment(
+        self,
+        experiment_text: str,
+        paper_id: int,
+        experiment_id: int,
+        total_experiments: int = 0,
+    ) -> Dict[str, Any]:
         """Extracts data for a single experiment across all sub-domains."""
         if len(experiment_text) < 20:
             logger.warning(f"Experiment {experiment_id} in paper {paper_id} text too short.")
@@ -58,15 +64,19 @@ class Extractor:
 
         formatted_text = user_template.format(experiment_text=experiment_text)
 
+        total_str = f"/{total_experiments}" if total_experiments else ""
+
         sub_domain_results = {}
         for sub_domain in self.sub_domain_names:
             prompt = self._load_prompt(sub_domain)
             model_class = self._get_model_class(sub_domain)
+            label = f"Exp {experiment_id}{total_str} | {sub_domain}"
 
             extracted_obj = self.llm_client.extract(
                 response_model=model_class,
                 system_prompt=prompt,
-                user_message=formatted_text
+                user_message=formatted_text,
+                label=label,
             )
 
             if extracted_obj:
@@ -138,7 +148,7 @@ class Extractor:
             )
             exp_text = f"{context_hint}{paper_content}"
 
-            result = self.extract_experiment(exp_text, paper_id, exp_num)
+            result = self.extract_experiment(exp_text, paper_id, exp_num, total_experiments=total)
             if result:
                 results.append(result)
 

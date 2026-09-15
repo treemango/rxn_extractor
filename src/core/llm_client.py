@@ -128,6 +128,7 @@ class LLMClient:
         user_message: str,
         max_retries: int = 3,
         initial_temperature: Optional[float] = None,
+        label: str = "",
     ) -> Optional[T]:
         """Extract structured JSON matching a Pydantic model via Ollama /api/chat."""
         temperature = initial_temperature if initial_temperature is not None \
@@ -209,8 +210,10 @@ class LLMClient:
                     f"  ✓ Response received (~{response_tokens_est} tokens). Parsing..."
                 )
                 # --- DEBUG: always print full LLM output ---
+                label_line = f"  [{label}]" if label else ""
                 logger.info(
                     f"\n{'─'*60}\n"
+                    f"{label_line}\n"
                     f"  [DEBUG] LLM RAW OUTPUT (attempt {attempt}):\n"
                     f"{content}\n"
                     f"{'─'*60}"

@@ -73,7 +73,7 @@ class BatchManager:
         input_dir: Optional[str] = None,
         limit: Optional[int] = None,
         resume: bool = False,
-        checkpoint_interval: int = 5,
+        checkpoint_interval: int = 1,  # save checkpoint after every paper
     ):
         """Process all markdown papers in input_dir and save to CSV.
 
