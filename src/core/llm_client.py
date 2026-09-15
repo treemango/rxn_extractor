@@ -159,6 +159,27 @@ class LLMClient:
             f"num_ctx={self.num_ctx} | timeout={self.timeout}s"
         )
 
+        # ── Context overflow guard ────────────────────────────────────────────
+        # If the prompt is larger than num_ctx, Ollama silently truncates from
+        # the END of the paper — exactly where Results/Tables usually live.
+        # This is the #1 cause of "0 experiments found" on large papers.
+        if prompt_tokens_est > self.num_ctx:
+            overage = prompt_tokens_est - self.num_ctx
+            logger.error(
+                f"\n{'!'*60}\n"
+                f"  CONTEXT OVERFLOW: Prompt is ~{prompt_tokens_est} tokens but\n"
+                f"  OLLAMA_NUM_CTX={self.num_ctx}. Ollama will silently cut the\n"
+                f"  last ~{overage} tokens (likely the Results/Tables section).\n"
+                f"  Fix: increase OLLAMA_NUM_CTX to at least {prompt_tokens_est + 512}\n"
+                f"  in your .env file, then restart.\n"
+                f"{'!'*60}"
+            )
+        elif prompt_tokens_est > self.num_ctx * 0.90:
+            logger.warning(
+                f"  ⚠ Prompt is using {prompt_tokens_est/self.num_ctx*100:.0f}% of "
+                f"num_ctx ({self.num_ctx}). Close to the limit."
+            )
+
         messages = [
             {"role": "system", "content": augmented_system},
             {"role": "user", "content": user_message},
