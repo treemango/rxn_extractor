@@ -133,18 +133,22 @@ class LLMClient:
         temperature = initial_temperature if initial_temperature is not None \
             else self.initial_temperature
 
-        # Inject schema so the model knows exact required fields
-        schema = json.dumps(response_model.model_json_schema(), indent=2)
+        # Instead of injecting the full Pydantic JSON schema (which uses technical
+        # vocabulary like $defs / anyOf / properties that confuses small models),
+        # just list the required top-level key names in plain English.
+        # The concrete examples already in the system prompt show the exact format.
+        required_keys = list(response_model.model_fields.keys())
+        keys_str = ', '.join(f'"{k}"' for k in required_keys)
         augmented_system = (
             # Hard language override — must come first so it takes priority
             "IMPORTANT: You MUST respond in English only. "
             "Regardless of the language of the input text, "
             "all your output — including field values — must be in English.\n\n"
             f"{system_prompt}\n\n"
-            f"## REQUIRED OUTPUT SCHEMA\n"
-            f"Your response MUST be valid JSON conforming to this schema:\n"
-            f"```json\n{schema}\n```\n"
-            f"Return ONLY the JSON object. No markdown fences, no explanation."
+            f"## REQUIRED OUTPUT KEYS\n"
+            f"Your JSON response MUST be an object containing ONLY these top-level keys:\n"
+            f"  {keys_str}\n"
+            f"Return ONLY the JSON object. No markdown fences, no explanation, no other text."
         )
 
         prompt_chars = len(augmented_system) + len(user_message)
