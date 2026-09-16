@@ -14,7 +14,9 @@ with open(input_file, "r", encoding="utf-8") as f:
     rows = list(reader)
 
 flattened_rows = []
-all_keys = set(["paper_identifier", "experiment_number", "overall_confidence"])
+# Base columns we always want first
+base_columns = ["paper_identifier", "experiment_number", "overall_confidence"]
+all_keys = set(base_columns)
 
 for row in rows:
     flat = {
@@ -23,24 +25,28 @@ for row in rows:
         "overall_confidence": row.get("overall_confidence")
     }
     
-    # Parse the JSON data column
     try:
         data = json.loads(row.get("data", "{}"))
-        # The JSON contains sub-domains like "catalyst", "conditions", etc.
-        for domain_name, domain_data in data.items():
-            if domain_data:
-                for k, v in domain_data.items():
-                    # Prefix column names with domain, e.g., "conditions_temperature"
-                    col_name = f"{domain_name}_{k}"
-                    flat[col_name] = v
-                    all_keys.add(col_name)
+        
+        # The actual extracted fields are nested inside "sub_domain_results"
+        sub_domain_results = data.get("sub_domain_results", {})
+        
+        for domain_name, domain_dict in sub_domain_results.items():
+            if isinstance(domain_dict, dict):
+                for field_name, field_value in domain_dict.items():
+                    # We drop the sub_domain name entirely and just use the inner heading
+                    flat[field_name] = field_value
+                    all_keys.add(field_name)
+                    
     except Exception as e:
         pass
         
     flattened_rows.append(flat)
 
-# Write to new CSV
-fieldnames = sorted(list(all_keys))
+# Sort fieldnames but keep the base_columns at the very beginning
+dynamic_keys = sorted(list(all_keys - set(base_columns)))
+fieldnames = base_columns + dynamic_keys
+
 with open(output_file, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
@@ -48,4 +54,3 @@ with open(output_file, "w", newline="", encoding="utf-8") as f:
 
 print(f"Successfully flattened {len(flattened_rows)} experiments!")
 print(f"Saved to: {output_file}")
-
