@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rxn Extractor — HITL Review</title>
+    <title>Reaction Extractor — HITL Review</title>
     <style>
         :root {
             --bg: #f1f5f9;
@@ -57,7 +57,7 @@
             margin-bottom: 0.75rem;
         }
 
-        .sidebar-logo span { color: var(--primary); }
+
 
         .nav-item {
             display: flex;
@@ -99,15 +99,20 @@
         /* ── Main area ───────────────────────────────────────────────────── */
         .main {
             flex: 1;
-            overflow-y: auto;
+            overflow-y: auto;   /* this is the ONLY scrolling container */
+            min-height: 0;      /* required: lets flex child shrink & scroll */
             padding: 2rem;
+        }
+
+        /* Each active page is a vertical flex column so gap/spacing works.   */
+        /* display:contents was the bug — it collapsed the layout box so the  */
+        /* browser could not measure content height and never showed scrollbar */
+        .page { display: none; }
+        .page.active {
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
         }
-
-        .page { display: none; }
-        .page.active { display: contents; }
 
         /* ── Page Header ─────────────────────────────────────────────────── */
         .page-header {
@@ -341,6 +346,14 @@
         }
 
         .field-input:hover  { border-color: var(--border); background: #f8fafc; }
+        textarea.field-input {
+            resize: vertical;
+            min-height: 90px;
+            line-height: 1.55;
+            font-family: inherit;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
         .field-input:focus  { outline: none; border-color: var(--primary); background: #eff6ff; }
         .field-input.dirty  { border-color: var(--orange); background: #fffbeb; }
         .field-input.saved  { border-color: var(--green); background: #f0fdf4; }
@@ -454,18 +467,18 @@
 
 <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
 <nav class="sidebar">
-    <div class="sidebar-logo">Rxn<span>Extractor</span></div>
+    <div class="sidebar-logo">Reaction Extractor</div>
     <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-        📊 Dashboard
+        Dashboard
     </button>
     <button class="nav-item" data-page="queue" onclick="navigate('queue')">
-        ✅ Validation Queue
+        Validation Queue
     </button>
     <button class="nav-item" data-page="papers" onclick="navigate('papers')">
-        📄 Papers
+        Papers
     </button>
     <button class="nav-item" data-page="export" onclick="navigate('export')">
-        📥 Export
+        Export
     </button>
 
     <div class="sidebar-footer">
@@ -484,7 +497,7 @@
                 <div class="page-title">Dashboard</div>
                 <div class="page-subtitle">Live extraction statistics</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↺ Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">Refresh</button>
         </div>
 
         <div class="stats-grid" id="stats-grid">
@@ -499,7 +512,7 @@
         <div class="card">
             <div class="card-header">
                 Queue breakdown by status
-                <button class="btn btn-primary btn-sm" onclick="navigate('queue')">Go to Queue →</button>
+                <button class="btn btn-primary btn-sm" onclick="navigate('queue')">Go to Queue</button>
             </div>
             <table>
                 <thead><tr><th>Status</th><th>Count</th></tr></thead>
@@ -522,7 +535,7 @@
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
-                <button class="btn btn-ghost btn-sm" onclick="loadQueue()">↺ Refresh</button>
+                <button class="btn btn-ghost btn-sm" onclick="loadQueue()">Refresh</button>
             </div>
         </div>
 
@@ -559,7 +572,7 @@
         </div>
 
         <div class="unsaved-banner" id="unsaved-banner">
-            <span>⚠ You have unsaved field edits.</span>
+            <span>You have unsaved field edits.</span>
             <div class="btn-group">
                 <button class="btn btn-ghost btn-sm" onclick="discardChanges()">Discard</button>
                 <button class="btn btn-primary btn-sm" onclick="saveAllChanges()">Save All Changes</button>
@@ -577,9 +590,9 @@
                 <textarea class="review-notes" id="review-notes" placeholder="Add any notes about this extraction..."></textarea>
             </div>
             <div class="btn-group">
-                <button class="btn btn-green" onclick="submitValidation('approved')">✓ Approve</button>
-                <button class="btn btn-orange" onclick="submitValidation('flagged')">⚑ Flag for Review</button>
-                <button class="btn btn-red" onclick="submitValidation('rejected')">✗ Reject</button>
+                <button class="btn btn-green" onclick="submitValidation('approved')">Approve</button>
+                <button class="btn btn-orange" onclick="submitValidation('flagged')">Flag for Review</button>
+                <button class="btn btn-red" onclick="submitValidation('rejected')">Reject</button>
             </div>
         </div>
 
@@ -601,7 +614,7 @@
                 <div class="page-title">Papers</div>
                 <div class="page-subtitle">All papers in the database</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="loadPapers()">↺ Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadPapers()">Refresh</button>
         </div>
 
         <div class="card">
@@ -631,7 +644,7 @@
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; max-width:700px;">
             <div class="card" style="padding:1.5rem">
-                <h3 style="margin-bottom:0.5rem">📊 Flat CSV</h3>
+                <h3 style="margin-bottom:0.5rem">Flat CSV</h3>
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
                     Fully flattened — every field gets its own column. Best for Excel or OriginLab.
                 </p>
@@ -641,7 +654,7 @@
                 </div>
             </div>
             <div class="card" style="padding:1.5rem">
-                <h3 style="margin-bottom:0.5rem">🗂 JSON</h3>
+                <h3 style="margin-bottom:0.5rem">JSON</h3>
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
                     Structured JSON — preserves nested sub-domain structure. Best for programmatic use.
                 </p>
@@ -915,23 +928,45 @@
 
                     const row = document.createElement('div');
                     row.className = 'field-row';
+                    // source_quote fields always get a full-height textarea
+                    // so the entire quote is visible without horizontal scrolling.
+                    const isQuote = fieldName.includes('source_quote');
 
                     const displayValue = (fieldValue === null || fieldValue === undefined || fieldValue === '')
                         ? '' : String(fieldValue);
 
-                    row.innerHTML = `
-                        <span class="field-label" title="${fieldPath}">${formatFieldName(fieldName)}</span>
-                        <input
-                            type="text"
-                            class="field-input ${displayValue === '' ? 'null-value' : ''}"
-                            data-path="${fieldPath}"
-                            value="${displayValue}"
-                            placeholder="null"
-                            oninput="onFieldChange(this)"
-                            onfocus="this.classList.remove('null-value')"
-                        />
-                    `;
+                    if (isQuote) {
+                        // Use a <textarea> — set value via JS to avoid HTML-encoding issues
+                        row.style.alignItems = 'flex-start';
+                        row.innerHTML = `
+                            <span class="field-label" style="padding-top:0.4rem"
+                                  title="${fieldPath}">${formatFieldName(fieldName)}</span>
+                            <textarea
+                                class="field-input ${displayValue === '' ? 'null-value' : ''}"
+                                data-path="${fieldPath}"
+                                placeholder="null"
+                                oninput="onFieldChange(this)"
+                                onfocus="this.classList.remove('null-value')"
+                            ></textarea>
+                        `;
+                        // Set value separately to safely handle quotes/angle-brackets in text
+                        row.querySelector('textarea').value = displayValue;
+                    } else {
+                        row.innerHTML = `
+                            <span class="field-label" title="${fieldPath}">${formatFieldName(fieldName)}</span>
+                            <input
+                                type="text"
+                                class="field-input ${displayValue === '' ? 'null-value' : ''}"
+                                data-path="${fieldPath}"
+                                value="${displayValue.replace(/"/g, '&quot;')}"
+                                placeholder="null"
+                                oninput="onFieldChange(this)"
+                                onfocus="this.classList.remove('null-value')"
+                            />
+                        `;
+                    }
                     card.appendChild(row);
+
                 });
             }
 
@@ -989,7 +1024,7 @@
         document.getElementById('unsaved-banner').classList.remove('visible');
 
         if (failCount === 0) {
-            toast(`✓ ${successCount} field(s) saved.`, 'success');
+            toast(`${successCount} field(s) saved.`, 'success');
             // Reload corrections log
             const corrections = await api(`/experiments/${currentExperimentId}/corrections`).catch(() => []);
             renderCorrections(corrections);
