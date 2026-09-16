@@ -2,151 +2,1057 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ethylene_conversion HITL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rxn Extractor — HITL Review</title>
     <style>
-        :root { --bg: #f9fafb; --sidebar: #1f2937; --sidebar-text: #f3f4f6; --text: #111827; --primary: #3b82f6; }
-        body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: var(--bg); color: var(--text); }
-        .sidebar { width: 250px; background: var(--sidebar); color: var(--sidebar-text); padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
-        .sidebar a { color: var(--sidebar-text); text-decoration: none; padding: 0.5rem; border-radius: 4px; }
-        .sidebar a:hover { background: rgba(255,255,255,0.1); }
-        .main { flex: 1; overflow-y: auto; padding: 2rem; }
+        :root {
+            --bg: #f1f5f9;
+            --sidebar: #0f172a;
+            --sidebar-hover: #1e293b;
+            --sidebar-active: #3b82f6;
+            --sidebar-text: #94a3b8;
+            --sidebar-text-active: #f8fafc;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --green: #10b981;
+            --red: #ef4444;
+            --orange: #f59e0b;
+            --yellow: #eab308;
+            --purple: #8b5cf6;
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────────────── */
+        .sidebar {
+            width: 220px;
+            min-width: 220px;
+            background: var(--sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem 0.75rem;
+            gap: 0.25rem;
+        }
+
+        .sidebar-logo {
+            color: #f8fafc;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.5rem 0.75rem 1.25rem;
+            border-bottom: 1px solid #1e293b;
+            margin-bottom: 0.75rem;
+        }
+
+        .sidebar-logo span { color: var(--primary); }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.6rem 0.75rem;
+            border-radius: var(--radius);
+            cursor: pointer;
+            color: var(--sidebar-text);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background 0.15s, color 0.15s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .nav-item:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--sidebar-text);
+        }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            margin-right: 0.4rem;
+        }
+
+        .status-dot.offline { background: var(--red); }
+
+        /* ── Main area ───────────────────────────────────────────────────── */
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
         .page { display: none; }
-        .page.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
-        th { background: #f3f4f6; }
-        .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; background: var(--primary); color: white; cursor: pointer; }
-        .btn:hover { opacity: 0.9; }
-        .card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        [contenteditable] { border-bottom: 1px dashed #ccc; padding: 2px; }
-        [contenteditable]:focus { outline: none; border-bottom-color: var(--primary); background: #eff6ff; }
+        .page.active { display: contents; }
+
+        /* ── Page Header ─────────────────────────────────────────────────── */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .page-title { font-size: 1.5rem; font-weight: 700; }
+        .page-subtitle { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+        /* ── Cards & Grids ───────────────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            border: 1px solid var(--border);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            color: var(--text);
+        }
+
+        .stat-card .value.green { color: var(--green); }
+        .stat-card .value.orange { color: var(--orange); }
+        .stat-card .value.red { color: var(--red); }
+
+        /* ── Table ───────────────────────────────────────────────────────── */
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        th {
+            background: #f8fafc;
+            padding: 0.7rem 1rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.875rem;
+            vertical-align: middle;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8fafc; }
+
+        .empty-row td {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2.5rem;
+        }
+
+        /* ── Badges ──────────────────────────────────────────────────────── */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        .badge-pending    { background: #f1f5f9; color: #64748b; }
+        .badge-approved   { background: #d1fae5; color: #065f46; }
+        .badge-rejected   { background: #fee2e2; color: #991b1b; }
+        .badge-flagged    { background: #fef3c7; color: #92400e; }
+        .badge-processed  { background: #dbeafe; color: #1e40af; }
+        .badge-error      { background: #fee2e2; color: #991b1b; }
+        .badge-no_experiments { background: #f3f4f6; color: #6b7280; }
+
+        .conf-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: white;
+        }
+        .conf-1 { background: #ef4444; }
+        .conf-2 { background: #f97316; }
+        .conf-3 { background: #eab308; }
+        .conf-4 { background: #10b981; }
+        .conf-5 { background: #059669; }
+
+        /* ── Buttons ─────────────────────────────────────────────────────── */
+        .btn {
+            padding: 0.45rem 0.9rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+
+        .btn:hover { opacity: 0.88; }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .btn-primary  { background: var(--primary); color: white; }
+        .btn-green    { background: var(--green); color: white; }
+        .btn-red      { background: var(--red); color: white; }
+        .btn-orange   { background: var(--orange); color: white; }
+        .btn-ghost    { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+        .btn-sm       { padding: 0.3rem 0.65rem; font-size: 0.75rem; }
+
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        /* ── Experiment Detail ───────────────────────────────────────────── */
+        .breadcrumb {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .breadcrumb a {
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover { text-decoration: underline; }
+
+        .experiment-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .subdomain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 1rem;
+        }
+
+        .subdomain-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+
+        .subdomain-title {
+            padding: 0.75rem 1rem;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+        }
+
+        .field-row {
+            display: flex;
+            align-items: center;
+            padding: 0.55rem 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            gap: 0.75rem;
+        }
+
+        .field-row:last-child { border-bottom: none; }
+
+        .field-label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            min-width: 140px;
+            flex-shrink: 0;
+        }
+
+        .field-input {
+            flex: 1;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.875rem;
+            background: transparent;
+            color: var(--text);
+            transition: border-color 0.15s, background 0.15s;
+            width: 100%;
+        }
+
+        .field-input:hover  { border-color: var(--border); background: #f8fafc; }
+        .field-input:focus  { outline: none; border-color: var(--primary); background: #eff6ff; }
+        .field-input.dirty  { border-color: var(--orange); background: #fffbeb; }
+        .field-input.saved  { border-color: var(--green); background: #f0fdf4; }
+
+        .null-value { color: #94a3b8; font-style: italic; font-size: 0.8rem; }
+
+        /* Review section */
+        .review-section {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+        }
+
+        .review-section h3 {
+            font-size: 0.875rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .review-notes {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.75rem;
+            font-size: 0.875rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 70px;
+            color: var(--text);
+            background: #f8fafc;
+        }
+
+        .review-notes:focus { outline: none; border-color: var(--primary); background: white; }
+
+        /* Corrections log */
+        .corrections-list { list-style: none; }
+        .corrections-list li {
+            padding: 0.5rem 0;
+            font-size: 0.8rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+        .corrections-list li:last-child { border-bottom: none; }
+        .corrections-list .field-name { font-weight: 600; color: var(--text); }
+
+        /* ── Toast ───────────────────────────────────────────────────────── */
+        #toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: slideIn 0.2s ease;
+            pointer-events: all;
+        }
+
+        .toast-success { background: #065f46; }
+        .toast-error   { background: #991b1b; }
+        .toast-info    { background: #1e40af; }
+
+        @keyframes slideIn {
+            from { transform: translateX(120%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+
+        /* ── Loading spinner ─────────────────────────────────────────────── */
+        .spinner {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-row td { text-align: center; padding: 2rem; }
+
+        /* ── Unsaved banner ──────────────────────────────────────────────── */
+        .unsaved-banner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            background: #fffbeb;
+            border: 1px solid var(--orange);
+            border-radius: var(--radius);
+            padding: 0.75rem 1.25rem;
+            font-size: 0.875rem;
+            color: #92400e;
+        }
+
+        .unsaved-banner.visible { display: flex; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>ethylene_conversion</h2>
-        <a href="#" onclick="showPage('dashboard')">Dashboard</a>
-        <a href="#" onclick="showPage('queue')">Validation Queue</a>
-        <a href="#" onclick="showPage('papers')">Papers</a>
-        <a href="#" onclick="showPage('export')">Export</a>
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+<nav class="sidebar">
+    <div class="sidebar-logo">Rxn<span>Extractor</span></div>
+    <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+        📊 Dashboard
+    </button>
+    <button class="nav-item" data-page="queue" onclick="navigate('queue')">
+        ✅ Validation Queue
+    </button>
+    <button class="nav-item" data-page="papers" onclick="navigate('papers')">
+        📄 Papers
+    </button>
+    <button class="nav-item" data-page="export" onclick="navigate('export')">
+        📥 Export
+    </button>
+
+    <div class="sidebar-footer">
+        <span class="status-dot" id="api-status-dot"></span>
+        <span id="api-status-text">Connecting…</span>
     </div>
-    
-    <div class="main">
-        <div id="dashboard" class="page active">
-            <h1>Dashboard</h1>
-            <div class="grid">
-                <div class="card"><h3>Total Papers</h3><p id="total-papers">0</p></div>
-                <div class="card"><h3>Total Experiments</h3><p id="total-experiments">0</p></div>
-                <div class="card"><h3>Pending Validation</h3><p id="pending-validation">0</p></div>
+</nav>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+    <!-- DASHBOARD ──────────────────────────────────────────────────────── -->
+    <section id="page-dashboard" class="page active">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Dashboard</div>
+                <div class="page-subtitle">Live extraction statistics</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↺ Refresh</button>
+        </div>
+
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card"><div class="label">Total Papers</div><div class="value" id="stat-total-papers">—</div></div>
+            <div class="stat-card"><div class="label">Processed Papers</div><div class="value green" id="stat-processed">—</div></div>
+            <div class="stat-card"><div class="label">Total Experiments</div><div class="value" id="stat-total-exp">—</div></div>
+            <div class="stat-card"><div class="label">Approved</div><div class="value green" id="stat-approved">—</div></div>
+            <div class="stat-card"><div class="label">Pending Review</div><div class="value orange" id="stat-pending">—</div></div>
+            <div class="stat-card"><div class="label">Avg Confidence</div><div class="value" id="stat-avg-conf">—</div></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Queue breakdown by status
+                <button class="btn btn-primary btn-sm" onclick="navigate('queue')">Go to Queue →</button>
+            </div>
+            <table>
+                <thead><tr><th>Status</th><th>Count</th></tr></thead>
+                <tbody id="queue-stats-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- QUEUE ──────────────────────────────────────────────────────────── -->
+    <section id="page-queue" class="page">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Validation Queue</div>
+                <div class="page-subtitle">Sorted by lowest confidence first — review these carefully</div>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center">
+                <select id="queue-status-filter" onchange="loadQueue()" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
+                    <option value="pending">Pending</option>
+                    <option value="flagged">Flagged</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" onclick="loadQueue()">↺ Refresh</button>
             </div>
         </div>
-        
-        <div id="queue" class="page">
-            <h1>Validation Queue</h1>
-            <table id="queue-table">
+
+        <div class="card">
+            <table>
                 <thead>
                     <tr>
-                        <th>Experiment ID</th>
+                        <th>Paper</th>
+                        <th>Exp #</th>
                         <th>Confidence</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody id="queue-body"></tbody>
             </table>
         </div>
-        
-        <div id="experiment" class="page">
-            <h1>Experiment Details <button class="btn" onclick="showPage('queue')">Back</button></h1>
-            <div id="experiment-details"></div>
-        </div>
-        
-        <div id="papers" class="page">
-            <h1>Papers</h1>
-            <table id="papers-table">
-                <thead><tr><th>Paper ID</th><th>Status</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
-        
-        <div id="export" class="page">
-            <h1>Export Data</h1>
-            <button class="btn" onclick="exportData('csv')">Export CSV</button>
-            <button class="btn" onclick="exportData('json')">Export JSON</button>
-        </div>
-    </div>
+    </section>
 
-    <script>
-        const API_BASE = window.location.origin + '/api';
-        
-        async function api(endpoint, options = {}) {
+    <!-- EXPERIMENT DETAIL ──────────────────────────────────────────────── -->
+    <section id="page-experiment" class="page">
+        <div class="breadcrumb">
+            <a onclick="navigate('queue')">← Back to Queue</a>
+            <span>›</span>
+            <span id="exp-breadcrumb">Experiment</span>
+        </div>
+
+        <div class="experiment-header">
+            <div>
+                <div class="page-title" id="exp-title">Experiment</div>
+                <div class="page-subtitle" id="exp-subtitle"></div>
+            </div>
+            <div id="exp-status-badge"></div>
+        </div>
+
+        <div class="unsaved-banner" id="unsaved-banner">
+            <span>⚠ You have unsaved field edits.</span>
+            <div class="btn-group">
+                <button class="btn btn-ghost btn-sm" onclick="discardChanges()">Discard</button>
+                <button class="btn btn-primary btn-sm" onclick="saveAllChanges()">Save All Changes</button>
+            </div>
+        </div>
+
+        <!-- Extracted fields by sub-domain -->
+        <div class="subdomain-grid" id="subdomain-grid"></div>
+
+        <!-- Review & approve -->
+        <div class="review-section">
+            <h3>Human Review</h3>
+            <div style="margin-bottom:0.75rem">
+                <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:0.4rem; font-weight:600;">Reviewer Notes</label>
+                <textarea class="review-notes" id="review-notes" placeholder="Add any notes about this extraction..."></textarea>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-green" onclick="submitValidation('approved')">✓ Approve</button>
+                <button class="btn btn-orange" onclick="submitValidation('flagged')">⚑ Flag for Review</button>
+                <button class="btn btn-red" onclick="submitValidation('rejected')">✗ Reject</button>
+            </div>
+        </div>
+
+        <!-- Corrections log -->
+        <div class="card">
+            <div class="card-header">Corrections Log</div>
+            <div style="padding:1rem">
+                <ul class="corrections-list" id="corrections-list">
+                    <li style="color:var(--text-muted); font-style:italic">No corrections made yet.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAPERS ─────────────────────────────────────────────────────────── -->
+    <section id="page-papers" class="page">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Papers</div>
+                <div class="page-subtitle">All papers in the database</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="loadPapers()">↺ Refresh</button>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Identifier</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Experiments</th>
+                        <th>Added</th>
+                    </tr>
+                </thead>
+                <tbody id="papers-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- EXPORT ─────────────────────────────────────────────────────────── -->
+    <section id="page-export" class="page">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Export Data</div>
+                <div class="page-subtitle">Download your extracted and reviewed data</div>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; max-width:700px;">
+            <div class="card" style="padding:1.5rem">
+                <h3 style="margin-bottom:0.5rem">📊 Flat CSV</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+                    Fully flattened — every field gets its own column. Best for Excel or OriginLab.
+                </p>
+                <div style="display:flex; flex-direction:column; gap:0.5rem">
+                    <button class="btn btn-primary" onclick="exportData('csv', null)">Export All (CSV)</button>
+                    <button class="btn btn-green" onclick="exportData('csv', 'approved')">Approved Only (CSV)</button>
+                </div>
+            </div>
+            <div class="card" style="padding:1.5rem">
+                <h3 style="margin-bottom:0.5rem">🗂 JSON</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+                    Structured JSON — preserves nested sub-domain structure. Best for programmatic use.
+                </p>
+                <div style="display:flex; flex-direction:column; gap:0.5rem">
+                    <button class="btn btn-primary" onclick="exportData('json', null)">Export All (JSON)</button>
+                    <button class="btn btn-green" onclick="exportData('json', 'approved')">Approved Only (JSON)</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- ── Toast container ───────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<script>
+    // ── Config ────────────────────────────────────────────────────────────────
+    const API = window.location.origin + '/api';
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let currentExperimentId = null;
+    let pendingChanges = {};  // { "sub_domain_results.catalyst.field_name": "new_value" }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    function toast(msg, type = 'info', duration = 3500) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => el.remove(), duration);
+    }
+
+    // ── Fetch wrapper ─────────────────────────────────────────────────────────
+    async function api(path, options = {}) {
+        try {
+            const res = await fetch(API + path, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options,
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            // For blob downloads (CSV/JSON), return response directly
+            if (options._raw) return res;
+            return await res.json();
+        } catch (e) {
+            toast('API Error: ' + e.message, 'error');
+            throw e;
+        }
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+    function navigate(page) {
+        // Hide all pages
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+
+        // Update sidebar active state
+        document.querySelectorAll('.nav-item').forEach(n => {
+            n.classList.toggle('active', n.dataset.page === page);
+        });
+
+        // Load data for the page
+        if (page === 'dashboard')   loadDashboard();
+        if (page === 'queue')       loadQueue();
+        if (page === 'papers')      loadPapers();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function confBadge(conf) {
+        const c = conf || '?';
+        const cls = conf ? `conf-${Math.min(5, Math.max(1, conf))}` : 'conf-3';
+        return `<span class="conf-badge ${cls}">${c}</span>`;
+    }
+
+    function statusBadge(status) {
+        return `<span class="badge badge-${status}">${status}</span>`;
+    }
+
+    function formatFieldName(name) {
+        // "catalyst_name_value" → "Catalyst Name Value"
+        return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function shortId(identifier) {
+        // Truncate long DOI-based identifiers
+        return identifier.length > 35 ? identifier.slice(0, 35) + '…' : identifier;
+    }
+
+    function formatDate(isoStr) {
+        if (!isoStr) return '—';
+        try {
+            return new Date(isoStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        } catch { return isoStr.slice(0, 10); }
+    }
+
+    // ── PHASE 1: Dashboard ────────────────────────────────────────────────────
+    async function loadDashboard() {
+        try {
+            const [stats, queueStats] = await Promise.all([
+                api('/stats'),
+                api('/queue/stats'),
+            ]);
+
+            document.getElementById('stat-total-papers').textContent = stats.total_papers ?? '—';
+            document.getElementById('stat-processed').textContent    = stats.processed_papers ?? '—';
+            document.getElementById('stat-total-exp').textContent    = stats.total_experiments ?? '—';
+            document.getElementById('stat-approved').textContent     = stats.approved_experiments ?? '—';
+            document.getElementById('stat-pending').textContent      =
+                (stats.total_experiments - stats.approved_experiments - stats.rejected_experiments) || 0;
+            document.getElementById('stat-avg-conf').textContent =
+                stats.avg_confidence != null ? stats.avg_confidence.toFixed(2) : '—';
+
+            // Queue breakdown table
+            const tbody = document.getElementById('queue-stats-body');
+            if (Object.keys(queueStats).length === 0) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="2">No experiments yet.</td></tr>';
+            } else {
+                tbody.innerHTML = Object.entries(queueStats)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([status, count]) => `
+                        <tr>
+                            <td>${statusBadge(status)}</td>
+                            <td><strong>${count}</strong></td>
+                        </tr>`)
+                    .join('');
+            }
+        } catch (e) {
+            // errors already toasted by api()
+        }
+    }
+
+    // ── PHASE 1: Queue ────────────────────────────────────────────────────────
+    async function loadQueue() {
+        const tbody = document.getElementById('queue-body');
+        const status = document.getElementById('queue-status-filter').value;
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><span class="spinner"></span> Loading…</td></tr>';
+
+        try {
+            const items = await api(`/queue?status=${status}&limit=200`);
+            if (!items.length) {
+                tbody.innerHTML = `<tr class="empty-row"><td colspan="5">No ${status} experiments.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td title="${item.paper_identifier}">${shortId(item.paper_identifier)}</td>
+                    <td>#${item.experiment_number}</td>
+                    <td>${confBadge(item.overall_confidence)}</td>
+                    <td>${statusBadge(item.validation_status)}</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm"
+                            onclick="openExperiment(${item.experiment_id})">
+                            Review
+                        </button>
+                    </td>
+                </tr>`).join('');
+        } catch (e) {}
+    }
+
+    // ── PHASE 1: Papers ───────────────────────────────────────────────────────
+    async function loadPapers() {
+        const tbody = document.getElementById('papers-body');
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><span class="spinner"></span> Loading…</td></tr>';
+
+        try {
+            const papers = await api('/papers?limit=200');
+            if (!papers.length) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No papers found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = papers.map(p => `
+                <tr>
+                    <td title="${p.paper_identifier}" style="font-family:monospace; font-size:0.78rem">
+                        ${shortId(p.paper_identifier)}
+                    </td>
+                    <td>${p.title || '—'}</td>
+                    <td>${statusBadge(p.processing_status)}</td>
+                    <td>${p.experiment_count}</td>
+                    <td>${formatDate(p.created_at)}</td>
+                </tr>`).join('');
+        } catch (e) {}
+    }
+
+    // ── PHASE 2: Experiment Detail ────────────────────────────────────────────
+    async function openExperiment(expId) {
+        currentExperimentId = expId;
+        pendingChanges = {};
+        document.getElementById('unsaved-banner').classList.remove('visible');
+
+        // Show page first so user sees immediate navigation
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-experiment').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+        // Show loading state
+        document.getElementById('exp-title').textContent = 'Loading…';
+        document.getElementById('exp-subtitle').textContent = '';
+        document.getElementById('exp-breadcrumb').textContent = `Experiment #${expId}`;
+        document.getElementById('subdomain-grid').innerHTML =
+            '<div style="padding:2rem; color:var(--text-muted)"><span class="spinner"></span> Loading experiment data…</div>';
+        document.getElementById('review-notes').value = '';
+        document.getElementById('corrections-list').innerHTML = '';
+
+        try {
+            const [exp, corrections] = await Promise.all([
+                api(`/experiments/${expId}`),
+                api(`/experiments/${expId}/corrections`),
+            ]);
+
+            // Header
+            document.getElementById('exp-breadcrumb').textContent =
+                `${shortId(exp.paper_identifier)} — Exp #${exp.experiment_number}`;
+            document.getElementById('exp-title').textContent =
+                `Experiment #${exp.experiment_number}`;
+            document.getElementById('exp-subtitle').textContent =
+                `Paper: ${exp.paper_identifier}  ·  Confidence: ${exp.overall_confidence ?? '?'}/5`;
+            document.getElementById('exp-status-badge').innerHTML =
+                statusBadge(exp.validation_status);
+
+            // Pre-fill notes
+            document.getElementById('review-notes').value = exp.review_notes || '';
+
+            // Render subdomain fields
+            renderSubdomains(exp.data);
+
+            // Corrections log
+            renderCorrections(corrections);
+
+        } catch (e) {
+            document.getElementById('subdomain-grid').innerHTML =
+                '<div style="padding:2rem; color:var(--red)">Failed to load experiment. Check console.</div>';
+        }
+    }
+
+    function renderSubdomains(data) {
+        const grid = document.getElementById('subdomain-grid');
+        grid.innerHTML = '';
+
+        if (!data) {
+            grid.innerHTML = '<div style="color:var(--text-muted)">No data available.</div>';
+            return;
+        }
+
+        const subDomainResults = data.sub_domain_results || {};
+        const subDomainNames = Object.keys(subDomainResults);
+
+        if (!subDomainNames.length) {
+            grid.innerHTML = '<div style="color:var(--text-muted)">No sub-domain data extracted.</div>';
+            return;
+        }
+
+        subDomainNames.forEach(domain => {
+            const fields = subDomainResults[domain];
+            if (!fields || typeof fields !== 'object') return;
+
+            const card = document.createElement('div');
+            card.className = 'subdomain-card';
+            card.innerHTML = `<div class="subdomain-title">${domain}</div>`;
+
+            const fieldEntries = Object.entries(fields);
+            if (!fieldEntries.length) {
+                card.innerHTML += '<div style="padding:0.75rem 1rem; color:var(--text-muted); font-size:0.8rem;">No fields extracted.</div>';
+            } else {
+                fieldEntries.forEach(([fieldName, fieldValue]) => {
+                    // The full dot-path for PUT /api/experiments/{id}
+                    const fieldPath = `sub_domain_results.${domain}.${fieldName}`;
+
+                    const row = document.createElement('div');
+                    row.className = 'field-row';
+
+                    const displayValue = (fieldValue === null || fieldValue === undefined || fieldValue === '')
+                        ? '' : String(fieldValue);
+
+                    row.innerHTML = `
+                        <span class="field-label" title="${fieldPath}">${formatFieldName(fieldName)}</span>
+                        <input
+                            type="text"
+                            class="field-input ${displayValue === '' ? 'null-value' : ''}"
+                            data-path="${fieldPath}"
+                            value="${displayValue}"
+                            placeholder="null"
+                            oninput="onFieldChange(this)"
+                            onfocus="this.classList.remove('null-value')"
+                        />
+                    `;
+                    card.appendChild(row);
+                });
+            }
+
+            grid.appendChild(card);
+        });
+    }
+
+    function renderCorrections(corrections) {
+        const list = document.getElementById('corrections-list');
+        if (!corrections || !corrections.length) {
+            list.innerHTML = '<li style="color:var(--text-muted); font-style:italic">No corrections made yet.</li>';
+            return;
+        }
+        list.innerHTML = corrections.map(c => `
+            <li>
+                <span class="field-name">${c.field_path}</span>:
+                "<del style="color:var(--red)">${c.original_value || 'null'}</del>"
+                → "<span style="color:var(--green)">${c.corrected_value}</span>"
+                ${c.created_at ? `<span style="float:right; color:var(--text-muted)">${formatDate(c.created_at)}</span>` : ''}
+            </li>`).join('');
+    }
+
+    // ── PHASE 3: Inline field editing ─────────────────────────────────────────
+    function onFieldChange(input) {
+        const path = input.dataset.path;
+        input.classList.add('dirty');
+        input.classList.remove('saved', 'null-value');
+        pendingChanges[path] = input.value;
+        document.getElementById('unsaved-banner').classList.add('visible');
+    }
+
+    async function saveAllChanges() {
+        if (!currentExperimentId || !Object.keys(pendingChanges).length) return;
+
+        const inputs = document.querySelectorAll('.field-input.dirty');
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const [fieldPath, value] of Object.entries(pendingChanges)) {
             try {
-                const res = await fetch(API_BASE + endpoint, options);
-                return await res.json();
+                await api(`/experiments/${currentExperimentId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ field: fieldPath, value }),
+                });
+                successCount++;
+                // Mark the specific input as saved
+                const input = document.querySelector(`.field-input[data-path="${fieldPath}"]`);
+                if (input) { input.classList.remove('dirty'); input.classList.add('saved'); }
             } catch (e) {
-                console.error(e);
-                toast('API Error');
+                failCount++;
             }
         }
 
-        function toast(msg) {
-            console.log("Toast: ", msg);
+        pendingChanges = {};
+        document.getElementById('unsaved-banner').classList.remove('visible');
+
+        if (failCount === 0) {
+            toast(`✓ ${successCount} field(s) saved.`, 'success');
+            // Reload corrections log
+            const corrections = await api(`/experiments/${currentExperimentId}/corrections`).catch(() => []);
+            renderCorrections(corrections);
+        } else {
+            toast(`Saved ${successCount}, failed ${failCount}. Check console.`, 'error');
+        }
+    }
+
+    function discardChanges() {
+        pendingChanges = {};
+        // Re-fetch and re-render the experiment to reset all inputs
+        openExperiment(currentExperimentId);
+    }
+
+    // ── PHASE 2: Approve / Reject / Flag ──────────────────────────────────────
+    async function submitValidation(status) {
+        if (!currentExperimentId) return;
+
+        // If there are unsaved edits, save them first
+        if (Object.keys(pendingChanges).length > 0) {
+            await saveAllChanges();
         }
 
-        function showPage(id) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            if (id === 'dashboard') loadDashboard();
-            if (id === 'queue') loadQueue();
+        const notes = document.getElementById('review-notes').value;
+        try {
+            await api(`/experiments/${currentExperimentId}/validate`, {
+                method: 'POST',
+                body: JSON.stringify({ validation_status: status, reviewer_notes: notes }),
+            });
+            toast(`Experiment ${status}.`, status === 'approved' ? 'success' : 'info');
+            // Update the status badge live
+            document.getElementById('exp-status-badge').innerHTML = statusBadge(status);
+            // Go back to queue after short delay
+            setTimeout(() => navigate('queue'), 1200);
+        } catch (e) {}
+    }
+
+    // ── PHASE 3: Export ───────────────────────────────────────────────────────
+    function exportData(format, status) {
+        // Correct URL: /api/export/csv or /api/export/json (NOT /api/export?format=...)
+        let url = `${API}/export/${format}`;
+        if (status) url += `?status=${status}`;
+        toast(`Downloading ${format.toUpperCase()}…`, 'info');
+        window.location.href = url;  // triggers browser download
+    }
+
+    // ── Health check — correct endpoint: /health (NOT /api/health) ───────────
+    async function checkHealth() {
+        try {
+            const res = await fetch(window.location.origin + '/health');
+            const ok = res.ok;
+            document.getElementById('api-status-dot').className = 'status-dot' + (ok ? '' : ' offline');
+            document.getElementById('api-status-text').textContent = ok ? 'API connected' : 'API offline';
+        } catch {
+            document.getElementById('api-status-dot').className = 'status-dot offline';
+            document.getElementById('api-status-text').textContent = 'API offline';
         }
+    }
 
-        async function loadDashboard() {
-            // Mock data fetch
-            document.getElementById('total-papers').innerText = '10';
-        }
-
-        async function loadQueue() {
-            // Mock data fetch
-            const tbody = document.querySelector('#queue-table tbody');
-            tbody.innerHTML = `<tr>
-                <td>EXP-001</td>
-                <td>3</td>
-                <td>Pending</td>
-                <td><button class="btn" onclick="openExperiment('EXP-001')">Review</button></td>
-            </tr>`;
-        }
-
-        async function openExperiment(id) {
-            showPage('experiment');
-            // Mock load and render panels
-            document.getElementById('experiment-details').innerHTML = `<p>Loading ${id}...</p>`;
-        }
-
-        function renderPropertyPanel(data) {
-            // Dynamic render based on subdomains
-        }
-
-        function startEdit(el) {
-            // setup edit logic
-        }
-
-        async function validateExperiment(id, status) {
-            // validate api call
-            toast('Experiment ' + status);
-        }
-
-        async function exportData(format) {
-            toast('Exporting ' + format);
-            window.open(API_BASE + '/export?format=' + format);
-        }
-
-        setInterval(() => {
-            fetch(API_BASE + '/health').catch(() => console.log('Health check failed'));
-        }, 30000);
-
-        // Init
-        loadDashboard();
-    </script>
+    // ── Init ──────────────────────────────────────────────────────────────────
+    checkHealth();
+    setInterval(checkHealth, 30000);
+    loadDashboard();
+</script>
 </body>
 </html>
