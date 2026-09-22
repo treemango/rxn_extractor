@@ -40,17 +40,34 @@ class ParserAgent:
         return 3  # default mid-range
 
     def parse(self, paper_content: str, paper_id: int = 0) -> Optional[ParserOutput]:
-        """Parses the paper content to find experiments."""
+        """Parses the paper content to find experiments.
+
+        Uses extract_with_prefix() so the paper is sent as the KV-cache prefix.
+        The parser instructions are the question (~200 tokens), keeping the
+        prompt structure identical to the subdomain calls for consistent caching.
+        """
         if len(paper_content) < 100:
             logger.warning(f"Paper {paper_id} content too short ({len(paper_content)} chars).")
             return None
 
-        user_message = self.user_template.format(paper_content=paper_content)
+        # The parser question: instructions go AFTER the paper (the cached prefix)
+        # so the model reads the full paper first, then follows these instructions.
+        question_prompt = (
+            f"{self.system_prompt}\n\n"
+            f"INSTRUCTION: Find and list every distinct experiment in the paper above.\n"
+            f"DO NOT summarize the paper.\n"
+            f"DO NOT return the abstract, title, authors, keywords, or references.\n"
+            f"Look specifically for:\n"
+            f"  - Tables showing results for different catalysts or conditions\n"
+            f"  - Sections labelled 'Experimental', 'Results', 'Catalytic Tests'\n"
+            f"  - Any reported yield, conversion, selectivity, temperature, or pressure values\n"
+            f"Return ONLY a JSON object with keys: total_experiments, experiments, extraction_notes."
+        )
 
-        result = self.llm_client.extract(
+        result = self.llm_client.extract_with_prefix(
             response_model=ParserOutput,
-            system_prompt=self.system_prompt,
-            user_message=user_message
+            paper_content=paper_content,
+            question_prompt=question_prompt,
         )
 
         if not result:
@@ -60,7 +77,7 @@ class ParserAgent:
         experiments_count = len(result.experiments) if hasattr(result, 'experiments') else 0
         avg_conf = 0.0
         if experiments_count > 0:
-            confs = [self._safe_confidence(e) for e in result.experiments]
+            confs    = [self._safe_confidence(e) for e in result.experiments]
             avg_conf = sum(confs) / len(confs)
 
         logger.info(
@@ -68,3 +85,4 @@ class ParserAgent:
             f"Avg Confidence: {avg_conf:.2f}"
         )
         return result
+

@@ -267,6 +267,177 @@ class LLMClient:
         logger.error("  ✗ All extraction attempts failed for this sub-domain.")
         return None
 
+    # ── KV-cache-aware extraction ──────────────────────────────────────────────
+    # The system prompt + paper form a FIXED prefix shared across all 21 calls
+    # for one paper. Ollama's KV cache stores the attention state after processing
+    # this prefix, so calls 2-21 only pay the cost of the ~150-token question.
+    #
+    # Message layout:
+    #   [system]    Generic anchor — IDENTICAL for every call on every paper
+    #   [user]      Paper text    — IDENTICAL for all 21 calls on this paper  ← cache boundary
+    #   [assistant] Acknowledgement — keeps alternating user/assistant format valid
+    #   [user]      Question      — domain rules + experiment pointer + required keys
+    # ──────────────────────────────────────────────────────────────────────────
+    _GENERIC_ANCHOR = (
+        "You are a precise scientific data extraction assistant. "
+        "A research paper will be provided, followed by specific extraction instructions. "
+        "Read the paper carefully. "
+        "IMPORTANT: You MUST respond in English only, regardless of the language of the paper."
+    )
+
+    _PAPER_ACK = (
+        "I have read the paper and am ready to answer extraction questions about it."
+    )
+
+    def extract_with_prefix(
+        self,
+        response_model: Type[T],
+        paper_content: str,
+        question_prompt: str,
+        max_retries: int = 3,
+        initial_temperature: Optional[float] = None,
+        label: str = "",
+    ) -> Optional[T]:
+        """KV-cache-aware extraction.
+
+        Sends the paper once as a shared prefix. Ollama caches the KV state
+        after reading it, so subsequent calls for the same paper only process
+        the small question_prompt (~150 tokens) instead of re-reading the full
+        paper every time.
+
+        Args:
+            response_model: Pydantic model defining the expected JSON shape.
+            paper_content:  Full paper text. Must be IDENTICAL across all calls
+                            on the same paper for the cache to fire.
+            question_prompt: Domain-specific instructions + experiment pointer.
+                            This is the ONLY part that changes per call.
+            label:          Display label for debug logging (e.g. "Exp 2/5 | catalyst").
+        """
+        temperature = initial_temperature if initial_temperature is not None \
+            else self.initial_temperature
+
+        # Append required keys to the question — same guard as in extract()
+        required_keys = list(response_model.model_fields.keys())
+        keys_str = ', '.join(f'"{k}"' for k in required_keys)
+        full_question = (
+            f"{question_prompt}\n\n"
+            f"## REQUIRED OUTPUT KEYS\n"
+            f"Your JSON response MUST be an object containing ONLY these top-level keys:\n"
+            f"  {keys_str}\n"
+            f"Return ONLY the JSON object. No markdown fences, no explanation, no other text."
+        )
+
+        # ── Context overflow guard ─────────────────────────────────────────────
+        # Total tokens = anchor + paper + ack + question
+        total_chars = (
+            len(self._GENERIC_ANCHOR)
+            + len(paper_content)
+            + len(self._PAPER_ACK)
+            + len(full_question)
+        )
+        prompt_tokens_est = total_chars // 4
+        logger.info(
+            f"  → [KV] Sending to Ollama | model={self.model} | "
+            f"~{prompt_tokens_est} tokens (~{len(paper_content)//4} paper "
+            f"+ ~{len(full_question)//4} question) | "
+            f"temp={temperature} | num_ctx={self.num_ctx} | timeout={self.timeout}s"
+        )
+
+        if prompt_tokens_est > self.num_ctx:
+            overage = prompt_tokens_est - self.num_ctx
+            logger.error(
+                f"\n{'!'*60}\n"
+                f"  CONTEXT OVERFLOW: Prompt is ~{prompt_tokens_est} tokens but\n"
+                f"  OLLAMA_NUM_CTX={self.num_ctx}. Overflow is ~{overage} tokens.\n"
+                f"  With prefix caching, Ollama drops older messages first (the paper\n"
+                f"  middle), so the question/instructions are preserved. However the\n"
+                f"  model will have incomplete paper context.\n"
+                f"  Fix: increase OLLAMA_NUM_CTX to at least {prompt_tokens_est + 512}\n"
+                f"  in your .env file, then restart.\n"
+                f"{'!'*60}"
+            )
+        elif prompt_tokens_est > self.num_ctx * 0.90:
+            logger.warning(
+                f"  [KV] Prompt is using {prompt_tokens_est/self.num_ctx*100:.0f}% of "
+                f"num_ctx ({self.num_ctx}). Close to the limit."
+            )
+
+        # 4-message structure — system + paper + ack + question
+        messages = [
+            {"role": "system",    "content": self._GENERIC_ANCHOR},
+            {"role": "user",      "content": paper_content},
+            {"role": "assistant", "content": self._PAPER_ACK},
+            {"role": "user",      "content": full_question},
+        ]
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(
+                    f"  [Attempt {attempt}/{max_retries}] Waiting for response "
+                    f"(temp={temperature})..."
+                )
+                payload = {
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "temperature": temperature,
+                        "num_ctx": self.num_ctx,
+                    },
+                }
+                response = self.client.post("/api/chat", json=payload)
+                response.raise_for_status()
+                content = response.json()["message"]["content"]
+                response_tokens_est = len(content) // 4
+                logger.info(
+                    f"  ✓ Response received (~{response_tokens_est} tokens). Parsing..."
+                )
+                label_line = f"  [{label}]" if label else ""
+                logger.info(
+                    f"\n{'─'*60}\n"
+                    f"{label_line}\n"
+                    f"  [DEBUG] LLM RAW OUTPUT (attempt {attempt}):\n"
+                    f"{content}\n"
+                    f"{'─'*60}"
+                )
+                parsed = self._extract_json(content)
+
+                expected_keys = set(response_model.model_fields.keys())
+                returned_keys = set(parsed.keys())
+                if not expected_keys.intersection(returned_keys):
+                    wrong_keys = list(returned_keys)[:5]
+                    logger.warning(
+                        f"  ✗ Attempt {attempt}: Model returned wrong JSON structure.\n"
+                        f"    Expected keys like: {list(expected_keys)[:5]}\n"
+                        f"    Got keys: {wrong_keys}\n"
+                        f"    Retrying with higher temperature..."
+                    )
+                    temperature = round(temperature + self.temperature_increment, 2)
+                    continue
+
+                result = response_model(**parsed)
+                logger.info(f"  ✓ Attempt {attempt}: Parsed successfully.")
+                return result
+            except json.JSONDecodeError as e:
+                logger.warning(f"  ✗ Attempt {attempt}: JSON parse error: {e}")
+            except Exception as e:
+                from pydantic import ValidationError
+                if isinstance(e, ValidationError):
+                    logger.warning(
+                        f"\n{'─'*60}\n"
+                        f"  [DEBUG] SCHEMA MISMATCH on attempt {attempt}:\n"
+                        f"  Expected model : {response_model.__name__}\n"
+                        f"  Validation errors:\n{e}\n"
+                        f"{'─'*60}"
+                    )
+                else:
+                    logger.warning(f"  ✗ Attempt {attempt}: Request error: {e}")
+            temperature = round(temperature + self.temperature_increment, 2)
+
+        logger.error("  ✗ All extraction attempts failed (KV prefix mode).")
+        return None
+
 
 _client: Optional[LLMClient] = None
 
