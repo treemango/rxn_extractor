@@ -76,9 +76,12 @@ class LLMClient:
                     }
                 ],
                 "stream": False,
-                # Use a tiny context for the health check to minimize overhead,
+                # Use a tiny context for the health check to minimise overhead,
                 # but use the full configured timeout to allow for the slow HDD load.
-                "options": {"num_ctx": 512, "temperature": 0.1} 
+                # IMPORTANT: num_gpu must be set here — Ollama loads the model on whichever
+                # device the FIRST request specifies. If this call omits num_gpu, the model
+                # loads on CPU and all subsequent extraction calls inherit that CPU session.
+                "options": {"num_ctx": 512, "temperature": 0.1, "num_gpu": 999}
             }
             response = self.client.post("/api/chat", json=payload, timeout=self.timeout)
             response.raise_for_status()
@@ -200,6 +203,7 @@ class LLMClient:
                     "options": {
                         "temperature": temperature,
                         "num_ctx": self.num_ctx,
+                        "num_gpu": 999,  # offload all layers to GPU; prevents silent CPU fallback
                     },
                 }
                 response = self.client.post("/api/chat", json=payload)
@@ -384,6 +388,7 @@ class LLMClient:
                     "options": {
                         "temperature": temperature,
                         "num_ctx": self.num_ctx,
+                        "num_gpu": 999,  # offload all layers to GPU; prevents silent CPU fallback
                     },
                 }
                 response = self.client.post("/api/chat", json=payload)

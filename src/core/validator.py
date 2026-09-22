@@ -108,7 +108,14 @@ class Validator:
         scores = []
         for res in sub_domain_results.values():
             if res and isinstance(res, dict) and "confidence_score" in res:
-                scores.append(res["confidence_score"])
+                val = res["confidence_score"]
+                # LLM sometimes returns null for confidence_score.
+                # min([None, 3]) raises TypeError in Python 3, so filter them out.
+                if val is not None:
+                    try:
+                        scores.append(int(val))
+                    except (TypeError, ValueError):
+                        pass
         if not scores:
             return 1
         return min(scores)
