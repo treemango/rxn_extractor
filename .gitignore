@@ -9,3 +9,4 @@ checkpoints/
 *.db
 *.bundle
 scratch_experimental_results.md
+*.zip

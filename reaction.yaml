@@ -3,6 +3,7 @@
 # ============================================================================
 domain_name: "ethylene_conversion"
 domain_description: "Extraction of catalytic data for ethylene conversion reactions, including catalyst properties and performance metrics."
+target_reaction: "oligomerization of ethylene to produce C6-C12 olefins"
 input_markdown_dir: "markdowns/"
 
 # ============================================================================

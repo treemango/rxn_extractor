@@ -17,6 +17,7 @@ def generate_config(domain: Dict[str, Any], output_path: str) -> None:
         f"DOMAIN_NAME = {repr(domain.get('domain_name', ''))}",
         f"DOMAIN_DESCRIPTION = {repr(domain.get('domain_description', ''))}",
         f"INPUT_MARKDOWN_DIR = {repr(domain.get('input_markdown_dir', ''))}",
+        f"TARGET_REACTION = {repr(domain.get('target_reaction', ''))}",
         ""
     ]
     

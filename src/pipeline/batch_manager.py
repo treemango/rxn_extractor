@@ -38,8 +38,13 @@ class BatchManager:
         try:
             from src.auto_generated import config as ag_config
             self.domain_name = ag_config.DOMAIN_NAME
+            self.target_reaction = getattr(ag_config, "TARGET_REACTION", "")
         except ImportError:
             self.domain_name = os.path.splitext(os.path.basename(domain_yaml_path))[0]
+            self.target_reaction = ""
+            
+        from src.agents.filter_agent import FilterAgent
+        self.filter_agent = FilterAgent(self.target_reaction)
 
     # ------------------------------------------------------------------ helpers
 
@@ -141,6 +146,21 @@ class BatchManager:
                 try:
                     content = read_paper(paper_info["file_path"])
                     paper_id = self._store_paper(paper_info)
+                    
+                    # --- RELEVANCE FILTER ---
+                    if self.target_reaction:
+                        is_relevant, reason = self.filter_agent.check_relevance(content, paper_id)
+                        if not is_relevant:
+                            self.store.update_paper_status(
+                                paper_id, 
+                                "irrelevant", 
+                                f"Skipped by filter: {reason}"
+                            )
+                            logger.info(f"⏭ {identifier}: Skipped - {reason}")
+                            stats["processed"] += 1
+                            progress.advance(task)
+                            continue
+
                     self.store.update_paper_status(paper_id, "processing")
 
                     results = self.extractor.extract_paper(
