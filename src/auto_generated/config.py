@@ -3,6 +3,7 @@ import math
 DOMAIN_NAME = 'ethylene_conversion'
 DOMAIN_DESCRIPTION = 'Extraction of catalytic data for ethylene conversion reactions, including catalyst properties and performance metrics.'
 INPUT_MARKDOWN_DIR = 'markdowns/'
+TARGET_REACTION = 'oligomerization of ethylene to produce C6-C12 olefins'
 
 SUB_DOMAIN_NAMES = {
     "catalyst": "Catalyst Properties",

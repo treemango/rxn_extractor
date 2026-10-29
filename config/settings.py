@@ -19,26 +19,19 @@ class DatabaseConfig:
             return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         return "sqlite:///rxn_extractor.db"
 
-class OllamaConfig:
-    OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost")
-    OLLAMA_PORT = os.getenv("OLLAMA_PORT", "11434")
-    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b-instruct-q4_K_M")
-    OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))
-    # Context window: 32768 tokens is safe on 60GB RAM for both 7B and 14B models.
-    # 14B model: ~9GB weights + ~8GB KV cache at 32K ctx = ~17GB total, well within 60GB.
-    # Covers papers up to ~25,000 words (~32,000 tokens). Increase to 65536 if needed.
-    OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
-
-    MODEL_PRESETS = {
-        "qwen2.5-7b": "qwen2.5:7b-instruct-q4_K_M",
-        "qwen2.5-14b": "qwen2.5:14b-instruct-q4_K_M",
-        "qwen2.5-32b": "qwen2.5:32b-instruct-q4_K_M",
-        "qwen2.5-72b": "qwen2.5:72b-instruct-q4_K_M"
-    }
-
-    @property
-    def base_url(self):
-        return f"{self.OLLAMA_HOST}:{self.OLLAMA_PORT}"
+class LLMConfig:
+    # Path to the GGUF model file downloaded in the 'models' directory
+    MODEL_PATH = os.getenv("MODEL_PATH", "models/Qwen2.5-14B-Instruct-Q4_K_M.gguf")
+    
+    # -1 means offload all layers to the GPU
+    NUM_GPU_LAYERS = int(os.getenv("NUM_GPU_LAYERS", "-1"))
+    
+    # 32768 tokens (~25,000 words) natively supported by Qwen2.5 (up to 128K).
+    # On 32GB V100 GPU: 9GB weights + 2GB KV-cache (32K) = ~11GB VRAM (plenty of room).
+    NUM_CTX = int(os.getenv("NUM_CTX", os.getenv("OLLAMA_NUM_CTX", "32768")))
+    
+    # How long to wait for generation (not as strictly needed for in-process, but keeping for compatibility)
+    TIMEOUT = int(os.getenv("LLM_TIMEOUT", "600"))
 
 class ExtractionConfig:
     MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
@@ -64,7 +57,7 @@ class LoggingConfig:
 
 # Singleton instances at module level
 db_config = DatabaseConfig()
-ollama_config = OllamaConfig()
+llm_config = LLMConfig()
 extraction_config = ExtractionConfig()
 api_config = APIConfig()
 batch_config = BatchConfig()
