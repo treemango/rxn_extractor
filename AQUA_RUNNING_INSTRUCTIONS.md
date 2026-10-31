@@ -107,21 +107,26 @@ hash -r
 
 ---
 
-## 5. Step 4: Install `llama-cpp-python` with GPU (CUDA 12.1) Support
+## 5. Step 4: Install `llama-cpp-python` with GPU (CUDA 11.4) Support
 
-This is the most complex step. Aqua's RHEL 7 system has glibc 2.17, which is too old for pre-built binary wheels. We must **compile from source**. Several environment issues must be worked around explicitly.
+This is the most complex step. Aqua's RHEL 7 system has glibc 2.17, which is too old for pre-built binary wheels. We must **compile from source**. 
 
-### 5.1 Purge All Modules and Reload Clean
+> **CRITICAL CLUSTER DISCOVERY — CUDA 11.4 Compatibility:**
+> * Aqua's GPU nodes are heterogeneous: some nodes have NVIDIA drivers supporting up to CUDA 12.2, while other GPU nodes only support **CUDA 11.4**!
+> * If you compile against CUDA 12.1 runtime, your job will fail whenever PBS assigns it to a CUDA 11.4 node (`ggml_cuda_init: failed to initialize CUDA: CUDA driver version is insufficient for CUDA runtime version`).
+> * **CUDA 11.4 runtime is backwards-compatible across 100% of Aqua's GPU nodes.** Compiling against CUDA 11.4 guarantees GPU acceleration on all nodes.
+
+### 5.1 Purge All Modules and Load CUDA 11.4
 
 `module purge` is critical to avoid inheriting stale CUDA 10.1 include paths from the default login environment:
 ```bash
 deactivate 2>/dev/null
 module purge
-module load cuda12.1
+module load cuda11.4
 
-# Verify nvcc is 12.1 and NOT 10.1
-nvcc --version   # Must say "release 12.1"
-which nvcc       # Must show /lfs/sware/cuda-12.1/bin/nvcc
+# Verify nvcc is 11.4
+nvcc --version   # Must say "release 11.4"
+which nvcc       # Must show /lfs/sware/cuda-11.4/bin/nvcc
 ```
 
 ### 5.2 Clear Stale Compiler Environment Variables
@@ -137,15 +142,15 @@ unset C_INCLUDE_PATH
 
 ### 5.3 Set All Compiler and CUDA Paths Explicitly
 
-Do not rely on any auto-detection. Every path is hardcoded:
+Do not rely on any auto-detection. Every path is hardcoded for CUDA 11.4:
 ```bash
 export CC=/lfs/sware/gcc9.2.0/bin/gcc
 export CXX=/lfs/sware/gcc9.2.0/bin/g++
-export CUDA_HOME=/lfs/sware/cuda-12.1
-export CUDA_PATH=/lfs/sware/cuda-12.1
-export CUDACXX=/lfs/sware/cuda-12.1/bin/nvcc
-export PATH=/lfs/sware/cuda-12.1/bin:$PATH
-export LD_LIBRARY_PATH=/lfs/sware/cuda-12.1/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/lfs/sware/cuda-11.4
+export CUDA_PATH=/lfs/sware/cuda-11.4
+export CUDACXX=/lfs/sware/cuda-11.4/bin/nvcc
+export PATH=/lfs/sware/cuda-11.4/bin:$PATH
+export LD_LIBRARY_PATH=/lfs/sware/cuda-11.4/lib64:/lfs/sware/gcc9.2.0/lib64:$LD_LIBRARY_PATH
 ```
 
 ### 5.4 Set CMAKE Build Flags
@@ -155,10 +160,10 @@ Each flag here fixes a specific error that was encountered:
 export CMAKE_ARGS="-DGGML_CUDA=on \
   -DCMAKE_C_COMPILER=/lfs/sware/gcc9.2.0/bin/gcc \
   -DCMAKE_CXX_COMPILER=/lfs/sware/gcc9.2.0/bin/g++ \
-  -DCMAKE_CUDA_COMPILER=/lfs/sware/cuda-12.1/bin/nvcc \
+  -DCMAKE_CUDA_COMPILER=/lfs/sware/cuda-11.4/bin/nvcc \
   -DCMAKE_CUDA_HOST_COMPILER=/lfs/sware/gcc9.2.0/bin/g++ \
-  -DCUDA_TOOLKIT_ROOT_DIR=/lfs/sware/cuda-12.1 \
-  -DCMAKE_CUDA_FLAGS=-I/lfs/sware/cuda-12.1/include \
+  -DCUDA_TOOLKIT_ROOT_DIR=/lfs/sware/cuda-11.4 \
+  -DCMAKE_CUDA_FLAGS=-I/lfs/sware/cuda-11.4/include \
   -DGGML_LLAMAFILE=OFF \
   -DGGML_NATIVE=OFF \
   -DGGML_AVX512=OFF"
@@ -168,25 +173,36 @@ export CMAKE_ARGS="-DGGML_CUDA=on \
 | :--- | :--- |
 | `CMAKE_C_COMPILER` / `CMAKE_CXX_COMPILER` | After `module purge`, `CC=clang` was left over. cmake could not find clang, so GCC 9.2 is specified explicitly. |
 | `CMAKE_CUDA_HOST_COMPILER` | nvcc defaults to system `/usr/bin/g++` (GCC 4.x) which treats C++11 as experimental. This forces nvcc to use GCC 9.2 as its host compiler. |
-| `CUDA_TOOLKIT_ROOT_DIR` | cmake's CUDA auto-detection found CUDA 10.1 headers from system paths even though nvcc was from CUDA 12.1. This overrides it. |
-| `CMAKE_CUDA_FLAGS` | Adds CUDA 12.1 includes ahead of any lingering CUDA 10.1 paths in the environment. |
+| `CUDA_TOOLKIT_ROOT_DIR` | cmake's CUDA auto-detection found CUDA 10.1 headers from system paths even though nvcc was from CUDA 11.4. This overrides it. |
+| `CMAKE_CUDA_FLAGS` | Adds CUDA 11.4 includes ahead of any lingering CUDA 10.1 paths in the environment. |
 | `DGGML_LLAMAFILE=OFF` | The LLAMAFILE tiled kernel uses AVX-512 VNNI (`vpdpbusd`) instructions that Aqua's GCC 9.2 assembler does not support. |
 | `DGGML_NATIVE=OFF` | Prevents `-march=native` from auto-enabling unsupported AVX-512 instructions based on the login node CPU. |
 | `DGGML_AVX512=OFF` | Explicitly disables all AVX-512 instruction sets. GPU inference is completely unaffected by this. |
 
-### 5.5 Reactivate Venv and Compile
+### 5.5 Reactivate Venv and Compile (Purging Pip Cache)
 
 ```bash
 source ~/rxn_env/bin/activate
 
-# Compile from source (takes 5–15 minutes — lots of output is normal)
-pip install llama-cpp-python --no-binary llama-cpp-python --verbose 2>&1 | tee /tmp/llama_build.log
+# Purge pip cache to prevent reusing any previously cached CUDA 12 builds:
+pip cache purge
+pip uninstall llama-cpp-python -y
+
+# Compile from source with --no-cache-dir (takes 5–10 minutes):
+pip install llama-cpp-python --no-binary llama-cpp-python --no-cache-dir --verbose 2>&1 | tee /tmp/llama_build_cu114.log
 ```
 
 Watch the counter climb from `[1/338]` to `[338/338]`. It is done when you see:
 ```
 Successfully installed llama-cpp-python-x.x.x
 ```
+
+### 5.6 Verify CUDA 11.4 Shared Library Linkage
+```bash
+ldd ~/rxn_env/lib/python3.10/site-packages/llama_cpp/lib/libllama.so | grep "libcudart"
+```
+It should report:
+`libcudart.so.11.0 => /lfs/sware/cuda-11.4/lib64/libcudart.so.11.0`
 
 ### 5.6 Install Project Core Dependencies
 ```bash
@@ -306,12 +322,12 @@ cat << 'EOF' > ~/rxn_extractor/job.sh
 cd $PBS_O_WORKDIR
 mkdir -p logs pdfs markdowns
 
-# 1. Clean modules & load CUDA 12.1
+# 1. Clean modules & load CUDA 11.4 (Backwards-compatible across all Aqua GPU nodes)
 module purge
-module load cuda12.1
+module load cuda11.4
 
-# 2. Set library search paths (Fixes GLIBCXX_3.4.25 and libspatialindex_c.so)
-export LD_LIBRARY_PATH=$HOME/rxn_env/lib:/lfs/sware/gcc9.2.0/lib64:$LD_LIBRARY_PATH
+# 2. Set library search paths (Fixes GLIBCXX_3.4.25, libcudart.so.11.0, and libspatialindex_c.so)
+export LD_LIBRARY_PATH=/lfs/sware/cuda-11.4/lib64:/lfs/sware/gcc9.2.0/lib64:$HOME/rxn_env/lib:$LD_LIBRARY_PATH
 
 # 3. Activate Python virtual environment
 source $HOME/rxn_env/bin/activate

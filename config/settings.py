@@ -26,9 +26,8 @@ class LLMConfig:
     # -1 means offload all layers to the GPU
     NUM_GPU_LAYERS = int(os.getenv("NUM_GPU_LAYERS", "-1"))
     
-    # 32768 tokens (~25,000 words) natively supported by Qwen2.5 (up to 128K).
-    # On 32GB V100 GPU: 9GB weights + 2GB KV-cache (32K) = ~11GB VRAM (plenty of room).
-    NUM_CTX = int(os.getenv("NUM_CTX", os.getenv("OLLAMA_NUM_CTX", "32768")))
+    # 8192 is safe for the 14B model on a V100 GPU
+    NUM_CTX = int(os.getenv("NUM_CTX", "8192"))
     
     # How long to wait for generation (not as strictly needed for in-process, but keeping for compatibility)
     TIMEOUT = int(os.getenv("LLM_TIMEOUT", "600"))

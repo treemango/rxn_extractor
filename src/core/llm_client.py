@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import os
+import time
 from typing import Optional, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -17,7 +18,7 @@ class LLMClient:
         self,
         model_path: str,
         n_gpu_layers: int = -1,
-        num_ctx: int = 8192,
+        num_ctx: int = 32768,
         timeout: int = 600,
         initial_temperature: float = 0.6,
         temperature_increment: float = 0.1,
@@ -33,8 +34,16 @@ class LLMClient:
         self._validate_connection()
 
     def _validate_connection(self):
-        """Check that the model file exists and initialize llama-cpp-python."""
-        logger.info(f"Loading local model from {self.model_path} ...")
+        """Check that the model file exists, log hardware diagnostics, and initialize llama-cpp-python."""
+        logger.info(
+            f"\n{'='*70}\n"
+            f"  [LLM INITIALIZATION DIAGNOSTICS]\n"
+            f"  Model Path         : {self.model_path}\n"
+            f"  n_gpu_layers       : {self.n_gpu_layers} (-1 = offload all to GPU)\n"
+            f"  n_ctx              : {self.num_ctx}\n"
+            f"  CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES', 'Not set (defaults to all)')}\n"
+            f"{'='*70}"
+        )
         
         if not os.path.exists(self.model_path):
             logger.error(
@@ -46,33 +55,53 @@ class LLMClient:
             sys.exit(1)
             
         try:
+            import llama_cpp
             from llama_cpp import Llama
-            # Initialize the model
+            
+            # Diagnostic: Inspect if CUDA backend is compiled into the binary
+            has_gpu_support = getattr(llama_cpp.llama_cpp, "GGML_USE_CUDA", None) or hasattr(llama_cpp.llama_cpp, "llama_supports_gpu_offload")
+            supports_offload = llama_cpp.llama_supports_gpu_offload() if hasattr(llama_cpp, "llama_supports_gpu_offload") else "unknown"
+            logger.info(f"  llama_cpp version       : {getattr(llama_cpp, '__version__', 'unknown')}")
+            logger.info(f"  GPU offload supported   : {supports_offload}")
+
+            # Initialize the model with VERBOSE=TRUE so C-level offload stats print directly to log
+            logger.info(f"  Instantiating Llama with n_gpu_layers={self.n_gpu_layers}, n_batch=512, n_ctx={self.num_ctx}...")
+            t0 = time.time()
             self.llm = Llama(
                 model_path=self.model_path,
                 n_gpu_layers=self.n_gpu_layers,
                 n_ctx=self.num_ctx,
-                verbose=False # Set to True if you want C-level debug logs from llama.cpp
+                n_batch=512,
+                verbose=True  # CRITICAL: Prints exact GPU vs CPU layer allocation table
             )
-            logger.info(f"✓ Model '{self.model_path}' loaded successfully into memory/GPU.")
+            load_time = time.time() - t0
+            logger.info(f"✓ Model loaded in {load_time:.2f}s.")
         except ImportError:
             logger.error("llama-cpp-python is not installed. Please install it.")
             sys.exit(1)
         except Exception as e:
-            logger.error(f"Failed to load model with llama-cpp-python: {e}")
+            logger.error(f"Failed to load model with llama-cpp-python: {e}", exc_info=True)
             sys.exit(1)
 
-        # Health check
-        logger.info(f"Sending a simple health-check prompt to verify inference...")
+        # Health check & benchmark
+        logger.info(f"Sending a simple health-check prompt to verify GPU speed...")
+        t_health = time.time()
         try:
             response = self.llm.create_chat_completion(
                 messages=[{"role": "user", "content": "Hello! Please reply with exactly the word 'READY' and nothing else."}],
                 temperature=0.1,
                 max_tokens=10
             )
+            elapsed_health = time.time() - t_health
             reply = response["choices"][0]["message"]["content"].strip()
-            logger.info(f"✓ Health check passed. Model replied: '{reply}'")
+            logger.info(
+                f"✓ Health check passed in {elapsed_health:.3f}s. Model replied: '{reply}'\n"
+                f"  (Note: On GPU, health check is <0.2s; on CPU, it is >2.0s)\n"
+                f"{'='*70}"
+            )
         except Exception as e:
+            logger.error(f"  ✗ Health check failed. Inference error: {e}")
+            sys.exit(1)
             logger.error(f"  ✗ Health check failed. Inference error: {e}")
             sys.exit(1)
 
@@ -168,6 +197,7 @@ class LLMClient:
             try:
                 logger.info(f"  [Attempt {attempt}/{max_retries}] Generating response (temp={temperature})...")
                 
+                t_gen_start = time.time()
                 # We use response_format={"type": "json_object"} to constrain output
                 # llama-cpp-python supports this if the model is capable
                 response = self.llm.create_chat_completion(
@@ -175,11 +205,21 @@ class LLMClient:
                     temperature=temperature,
                     response_format={"type": "json_object"}
                 )
+                elapsed_gen = time.time() - t_gen_start
                 
                 content = response["choices"][0]["message"]["content"]
                 response_tokens_est = len(content) // 4
                 
-                logger.info(f"  ✓ Response generated (~{response_tokens_est} tokens). Parsing...")
+                usage = response.get("usage", {})
+                prompt_toks = usage.get("prompt_tokens", prompt_tokens_est)
+                completion_toks = usage.get("completion_tokens", response_tokens_est)
+                tok_per_sec = completion_toks / max(0.001, elapsed_gen)
+
+                logger.info(
+                    f"  ✓ Response received in {elapsed_gen:.1f}s | "
+                    f"Prompt: {prompt_toks} toks | Generated: {completion_toks} toks | "
+                    f"Speed: {tok_per_sec:.2f} tokens/sec"
+                )
                 
                 label_line = f"  [{label}]" if label else ""
                 logger.info(
