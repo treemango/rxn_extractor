@@ -72,7 +72,7 @@ class LLMClient:
                 n_gpu_layers=self.n_gpu_layers,
                 n_ctx=self.num_ctx,
                 n_batch=512,
-                verbose=True  # CRITICAL: Prints exact GPU vs CPU layer allocation table
+                verbose=False  # CRITICAL: If True, prints exact GPU vs CPU layer allocation table
             )
             load_time = time.time() - t0
             logger.info(f"✓ Model loaded in {load_time:.2f}s.")
