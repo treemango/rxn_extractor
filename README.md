@@ -41,33 +41,43 @@ rxn_extractor/
 
 ### Inputs
 
-The domain definition is `reaction.yaml`. It identifies the reaction and the Markdown input directory, then declares extraction sub-domains and fields. For example, the active schema includes catalyst properties, reaction conditions, catalytic performance, and paper metadata:
+The domain definition is `reaction.yaml`. It identifies the reaction and Markdown input directory, then declares extraction sub-domains and fields. The active schema extracts catalyst identity/preparation/characterization and reaction conditions:
 
 ```yaml
 domain_name: "ethylene_conversion"
 target_reaction: "oligomerization of ethylene to produce C6-C12 olefins"
 input_markdown_dir: "markdowns/"
 sub_domains:
+  - name: "catalyst"
+    fields:
+      - name: "catalyst_class"
+        type: "string"
+      - name: "surface_area"
+        type: "float"
+        allowed_units: ["m2/g", "m²/g"]
   - name: "conditions"
     fields:
       - name: "temperature"
         type: "range"
         target_unit: "Celsius"
-      - name: "pressure"
+      - name: "total_pressure"
+        type: "float"
+        target_unit: "atm"
+      - name: "ethylene_partial_pressure"
         type: "float"
         target_unit: "atm"
 ```
 
 This is a shortened illustration; use the complete schema in `reaction.yaml`. Put source PDFs in `pdfs/` for conversion, or provide converted `.md` papers in `markdowns/` for extraction. PDF conversion writes matching Markdown files to `markdowns/`; the extractor consumes Markdown, not PDFs.
 
-If the schema changes, compile it before extraction:
+If the schema changes, rebuild generated artifacts before extraction:
 
 ```bash
 source ~/rxn_env/bin/activate
-python -m src.builder.cli --domain reaction.yaml
+python -m src.builder.cli
 ```
 
-The generated models, validation/conversion config, prompts, and UI are written under `src/auto_generated/`. Generated files should be rebuilt from the YAML rather than edited by hand.
+The generated models, validation/conversion config, and prompts are written under `src/auto_generated/`. The builder leaves an existing UI scaffold unchanged. Generated files should be rebuilt from the YAML rather than edited by hand. Review the generated model and prompts, then run `python run_batch.py` (or use the PBS extraction job on Aqua). Existing CSV records are not migrated to a changed schema; archive or separate prior results before combining new runs.
 
 ### Outputs
 
@@ -87,9 +97,19 @@ In `experiments.csv`, the `data` column contains a JSON-encoded object with the 
   "paper_identifier": "sample-paper.md",
   "experiment_number": 1,
   "data": {
-    "catalyst": { "catalyst_name": "Ni/Al2O3", "surface_area": 145.0 },
-    "conditions": { "temperature": 250.0, "pressure": 1.0 },
-    "performance": { "ethylene_conversion": 62.5 }
+    "catalyst": {
+      "catalyst_class": "supported metal catalyst",
+      "active_metal": "Ni",
+      "surface_area_value": 145.0,
+      "surface_area_unit": "m2/g"
+    },
+    "conditions": {
+      "temperature_min": 250.0,
+      "temperature_max": 250.0,
+      "total_pressure_value": 1.0,
+      "total_pressure_unit": "atm",
+      "ethylene_partial_pressure_value": null
+    }
   },
   "overall_confidence": 4,
   "validation_status": "...",

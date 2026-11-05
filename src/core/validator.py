@@ -142,7 +142,12 @@ class Validator:
             if data and isinstance(data, dict):
                 for k, v in data.items():
                     if isinstance(v, (int, float)) and not isinstance(v, bool):
-                        issue = self._check_bounds(sub, k, v)
+                        field_name = k
+                        for suffix in ("_value", "_min", "_max"):
+                            if field_name.endswith(suffix):
+                                field_name = field_name[:-len(suffix)]
+                                break
+                        issue = self._check_bounds(sub, field_name, v)
                         if issue:
                             data_quality_issues.append(issue)
         

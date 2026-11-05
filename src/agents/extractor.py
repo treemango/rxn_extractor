@@ -7,6 +7,7 @@ from src.core.llm_client import get_llm_client, LLMClient
 from src.core.normalizer import normalize_extraction
 from src.core.validator import Validator
 from src.agents.parser_agent import ParserAgent
+from src.pipeline.file_reader import index_markdown_sections, select_sections
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class Extractor:
         paper_id: int,
         experiment_id: int,
         total_experiments: int = 0,
+        section_contexts: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Extracts data for a single experiment across all sub-domains."""
         if len(experiment_text) < 20:
@@ -62,12 +64,17 @@ class Extractor:
         except ImportError:
             user_template = "Extract from this text:\n\n{experiment_text}"
 
-        formatted_text = user_template.format(experiment_text=experiment_text)
-
         total_str = f"/{total_experiments}" if total_experiments else ""
 
         sub_domain_results = {}
         for sub_domain in self.sub_domain_names:
+            source_text = experiment_text
+            if section_contexts is not None:
+                source_text = (
+                    f"{experiment_text}\n\n"
+                    f"{section_contexts.get(sub_domain, '')}"
+                )
+            formatted_text = user_template.format(experiment_text=source_text)
             prompt = self._load_prompt(sub_domain)
             model_class = self._get_model_class(sub_domain)
             label = f"Exp {experiment_id}{total_str} | {sub_domain}"
@@ -103,7 +110,20 @@ class Extractor:
 
     def extract_paper(self, paper_content: str, paper_id: int, parser_agent: ParserAgent) -> List[Dict[str, Any]]:
         """Parses a paper for experiments and extracts data from each."""
-        parser_output = parser_agent.parse(paper_content, paper_id)
+        sections = index_markdown_sections(paper_content)
+        parser_selection = select_sections(sections, "parser")
+        if parser_selection.used_fallback:
+            logger.warning(
+                "Paper %s: no parser section headings matched; using all non-reference sections.",
+                paper_id,
+            )
+        logger.info(
+            "Paper %s parser evidence: sections=%s, estimated_tokens=%s",
+            paper_id,
+            ",".join(parser_selection.section_ids),
+            len(parser_selection.text) // 4,
+        )
+        parser_output = parser_agent.parse(parser_selection.text, paper_id)
         if not parser_output or not hasattr(parser_output, 'experiments'):
             return []
 
@@ -121,7 +141,7 @@ class Extractor:
             temp        = getattr(experiment, 'main_temperature', None) or 'not specified'
             pressure    = getattr(experiment, 'main_pressure', None) or 'not specified'
             products    = getattr(experiment, 'products_mentioned', None) or 'not specified'
-            key_section = getattr(experiment, 'key_section', None) or 'see full paper below'
+            key_section = getattr(experiment, 'key_section', None) or ''
             key_params  = getattr(experiment, 'key_parameters', '') or ''
 
             context_hint = (
@@ -143,14 +163,51 @@ class Extractor:
                 f"  3. Focus especially on the section/table referenced in 'Paper location'.\n"
                 f"  4. If a field is not mentioned for THIS specific experiment, return null.\n"
                 f"  5. Never mix values from a different experiment into this one.\n"
-                f"{'='*60}\n"
-                f"\nFULL PAPER TEXT (for reference):\n"
+                f"{'='*60}"
             )
-            exp_text = f"{context_hint}{paper_content}"
 
-            result = self.extract_experiment(exp_text, paper_id, exp_num, total_experiments=total)
+            section_contexts = {}
+            for sub_domain in self.sub_domain_names:
+                selection = select_sections(sections, sub_domain, locator=key_section)
+                section_contexts[sub_domain] = selection.text
+                if selection.used_fallback:
+                    logger.warning(
+                        "Paper %s experiment %s (%s): no matching section headings; "
+                        "using all non-reference sections.",
+                        paper_id,
+                        exp_num,
+                        sub_domain,
+                    )
+                estimated_tokens = len(selection.text) // 4
+                context_limit = getattr(self.llm_client, "num_ctx", None)
+                if context_limit and estimated_tokens > max(1024, context_limit - 2048):
+                    logger.warning(
+                        "Paper %s experiment %s (%s): selected sections %s estimate "
+                        "%s tokens and may be truncated by the context guard.",
+                        paper_id,
+                        exp_num,
+                        sub_domain,
+                        ",".join(selection.section_ids),
+                        estimated_tokens,
+                    )
+                logger.info(
+                    "Paper %s experiment %s (%s) evidence: sections=%s, "
+                    "estimated_tokens=%s",
+                    paper_id,
+                    exp_num,
+                    sub_domain,
+                    ",".join(selection.section_ids),
+                    estimated_tokens,
+                )
+
+            result = self.extract_experiment(
+                context_hint,
+                paper_id,
+                exp_num,
+                total_experiments=total,
+                section_contexts=section_contexts,
+            )
             if result:
                 results.append(result)
 
         return results
-

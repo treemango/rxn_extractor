@@ -172,17 +172,18 @@ The physical and operational constraints of the Aqua cluster directly governed t
 5. If `is_relevant == False`, the paper is registered in `papers.csv` with status `irrelevant`, recording the rejection justification, and execution terminates for that paper in ~3 seconds.
 
 #### Phase 3: Experiment Enumeration (`src/agents/parser_agent.py`)
-1. Ingests the complete markdown text of relevant papers.
-2. Formats the instruction-first prompt using `PARSER_USER_TEMPLATE` and `src/auto_generated/prompts/parser.md`.
-3. Dispatches the prompt to `LLMClient.extract()`.
-4. The LLM returns a structured JSON payload conforming to `ParserOutput`:
+1. Indexes the paper Markdown by heading, retaining heading paths, source text, and tables; text before the first heading is retained as a preamble section.
+2. Selects the preamble and sections matching common abstract, introduction, experimental/methods, results, and catalytic-test headings. Reference sections are excluded.
+3. If no configured heading matches, uses all non-reference sections and records that fallback in the prompt and logs.
+4. Formats the selected section text using `PARSER_USER_TEMPLATE` and `src/auto_generated/prompts/parser.md`.
+5. Dispatches the prompt to `LLMClient.extract()`.
+6. The LLM returns a structured JSON payload conforming to `ParserOutput`:
    * Identifies total experiments ($N$).
    * Extracts catalyst labels, reactants, operating temperatures, pressures, key sections, and locator descriptions per experiment.
-5. Updates `papers.csv` status to `parsed`, recording total experiment counts.
-
 #### Phase 4: Sub-Domain Extraction (`src/agents/extractor.py`)
 1. Iterates sequentially from experiment $1$ to $N$.
-2. For each experiment, generates a localized contextual prefix block:
+2. For each experiment, selects Markdown sections separately for catalyst characterization and reaction conditions. The parser's `key_section` table/row locator is used to prioritize matching source sections; tables remain intact with their headers.
+3. Generates a localized contextual prefix block:
    ```text
    ============================================================
    TARGET EXPERIMENT: #i of N
@@ -195,12 +196,10 @@ The physical and operational constraints of the Aqua cluster directly governed t
    Paper location : <key_section>
    ============================================================
    ```
-3. Sequentially executes queries across the four configured sub-domains:
-   * `catalyst`: Catalyst composition, support material, active metals, surface areas.
-   * `conditions`: Reactor configuration, temperature, pressure, space velocity, time-on-stream.
-   * `performance`: Ethylene conversion percentage, product selectivities ($C_6, C_8, C_{10}, C_{12}$), reaction rates.
-   * `metadata`: Publication year, DOI, operational notes.
-4. Each extraction target is constrained by its respective Pydantic model (`src/auto_generated/models.py`).
+4. Sequentially executes queries across the two configured sub-domains, supplying only the selected evidence blocks rather than appending the full paper:
+   * `catalyst`: Catalyst class, active metal/loading, support identity, preparation and activation, BET area, pore size/volume, and acidity/site-density measurements.
+   * `conditions`: Reactor type, temperature, total and ethylene partial pressure, WHSV, GHSV, and time-on-stream.
+5. Each extraction target is constrained by its respective Pydantic model (`src/auto_generated/models.py`). Logs record selected section IDs and approximate input size; the LLM client's existing context guard reports any truncation.
 
 #### Phase 5: Normalization and Quality Validation (`src/core/normalizer.py`, `src/core/validator.py`)
 1. `normalizer.py` iterates over every extracted key-value pair. If raw units differ from target canonical units (e.g., input: `2.5 MPa`, target: `atm`), it applies deterministic lambda conversion factors defined in `UNIT_CONVERSIONS`.
@@ -228,10 +227,10 @@ $$A = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V$$
 ```
 Sequence Layout A (Instruction-First Framing — Current Production Baseline):
 ┌───────────────────────────┬───────────────────────────────────────────┐
-│ Dynamic Directives (500t) │ Full Paper Context (12,000 to 16,000t)    │
+│ Dynamic Directives (500t) │ Selected Section Evidence (task-specific) │
 └───────────────────────────┴───────────────────────────────────────────┘
-▲ Token 0 changes on every sub-domain call (catalyst != conditions != performance).
-Result: Complete KV cache invalidation. Recomputes all 15,000 tokens every call.
+▲ Token 0 changes on every sub-domain call (catalyst != conditions).
+Result: Cache reuse is limited; each call receives only its selected evidence.
 
 Sequence Layout B (Prefix Inversion — Evaluated for KV Cache Reuse):
 ┌───────────────────────────────────────────┬───────────────────────────┐
@@ -252,10 +251,10 @@ If token $t_0$ diverges, $L = 0$. The entire KV tensor cache is invalidated, req
 ### 5.2 Architectural Trade-Off Analysis
 
 1. **Current Pipeline Layout (Sequence Layout A):**
-   * *Order:* `[System Prompt & Schema (Dynamic)]` $\rightarrow$ `[Pointer Header (Dynamic)]` $\rightarrow$ `[Paper Markdown (Static)]`.
+   * *Order:* `[System Prompt & Schema (Dynamic)]` $\rightarrow$ `[Experiment Pointer (Dynamic)]` $\rightarrow$ `[Selected Section Evidence (Task-Specific)]`.
    * *Prefix Length:* $L = 0$.
-   * *Computational Cost per Query:* Full prefill of $12,000 \text{ to } 16,000$ tokens on every sub-domain call.
-   * *Accuracy Metric:* 100% extraction recall on broad experiment discovery (21 out of 21 test experiments detected).
+   * *Computational Cost per Query:* Prefill is bounded to task-relevant sections rather than the full paper.
+   * *Accuracy Metric:* Section selection has focused regression tests; measure extraction recall on the paper corpus before claiming a production accuracy rate.
 2. **Inverted Prefix Layout (Sequence Layout B):**
    * *Order:* `[Paper Markdown (Static)]` $\rightarrow$ `[System Prompt & Schema (Dynamic)]`.
    * *Prefix Length:* $L \approx 12,000 \text{ to } 16,000$ tokens.
@@ -337,25 +336,19 @@ The pipeline generates three primary CSV relational structures under `data/`:
   * `experiment_number` (`int`): Local experiment index within the paper.
   * `experiment_label` (`str`): Author's designation (e.g., "Run 3b", "Table 2, Entry 4").
 * **Catalyst Sub-Domain:**
-  * `catalyst_name` (`str`): Full catalyst formulation.
-  * `support_material` (`str`): Solid support (e.g., "H-ZSM-5", "SiO2-Al2O3").
+  * `catalyst_class` (`str`): Catalyst class or family.
   * `active_metal` (`str`): Catalytic metal (e.g., "Ni", "Cr", "Ti").
-  * `metal_loading_wt_percent` (`float`): Loading normalized to wt%.
-  * `surface_area` (`float`): BET surface area normalized to $m^2/g$.
-  * `pore_volume` (`float`): Pore volume normalized to $cm^3/g$.
+  * `metal_loading_value` / `metal_loading_unit`: Numeric loading and reported basis.
+  * `support_identity`, `preparation_method`, `pretreatment_or_activation` (`str`): Support and catalyst preparation/activation details.
+  * `surface_area_value`, `pore_diameter_value`, `pore_volume_value`: Numeric characterization values; corresponding `_unit` fields preserve reported units.
+  * `total_acidity_value` (`float`): Total acidity measured by NH3-TPD; corresponding `_unit` preserves the reported unit.
+  * `bronsted_acid_site_density_value`, `lewis_acid_site_density_value` (`float`): Acid-site densities; corresponding `_unit` fields preserve reported units/basis.
 * **Reaction Conditions Sub-Domain:**
   * `reactor_type` (`str`): "fixed-bed", "autoclave", "semi-batch", "CSTR".
-  * `temperature` (`float`): Reaction temperature normalized strictly to **Celsius** ($^\circ\text{C}$).
-  * `pressure` (`float`): Total pressure normalized strictly to **atm**.
-  * `space_velocity` (`float`): Space velocity normalized to $h^{-1}$ (WHSV/GHSV).
-  * `testing_time` (`float`): Time-on-stream normalized to **hours**.
-* **Performance Metrics Sub-Domain:**
-  * `ethylene_conversion` (`float`): Substrate conversion normalized to $\%$.
-  * `c8_c16_selectivity` (`float`): Oligomer selectivity fraction normalized to $\%$.
-  * `isomers_selectivity` (`float`): Branched vs linear fraction ($\%$).
-  * `yield` (`float`): Direct product yield ($\%$).
-  * `reaction_rate` (`float`): Normalized to $mol \cdot g^{-1} \cdot h^{-1}$.
-  * `turnover_frequency` (`float`): Normalized to $s^{-1}$.
+  * `temperature_min`, `temperature_max`, `temperature_unit`: Temperature range; Kelvin is converted to Celsius.
+  * `total_pressure_value`, `ethylene_partial_pressure_value` and their `_unit` fields: Distinct pressures, normalized to **atm**.
+  * `whsv_value` / `whsv_unit`, `ghsv_value` / `ghsv_unit`: Distinct space velocities; reported bases are retained and never conflated.
+  * `time_on_stream_min`, `time_on_stream_max`, `time_on_stream_unit`: Duration range normalized to **hours**.
 * **Data Quality & Traceability:**
   * `confidence_score` (`int`): Deterministic validation score ($1$ = lowest, $5$ = highest).
   * `_normalization_warning` (`str`): Audit log of approximate inputs, missing units, or midpoint conversions.

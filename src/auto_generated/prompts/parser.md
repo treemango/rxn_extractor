@@ -11,8 +11,9 @@ is mentioned: a catalyst name, a reaction temperature, a product yield, or a
 conversion/selectivity value.
 
 ## WHAT MAKES TWO SEPARATE EXPERIMENTS
-- Different catalyst formulations, active metals, or supports
-- Different reaction conditions (temperature, pressure, space velocity)
+- Different catalyst classes, active metals, supports, or metal loadings
+- Different preparation, pretreatment, or activation methods
+- Different reaction conditions (temperature, total or ethylene partial pressure, WHSV, GHSV)
 - Each table row with different numerical results = a separate experiment
 - A temperature series (e.g. 30°C, 55°C, 80°C, 105°C) = one experiment per temperature
 

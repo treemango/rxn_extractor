@@ -50,10 +50,11 @@ def normalize_extraction(extraction_data: dict, config_module: Any) -> dict:
             if conv_key in unit_conversions:
                 conv_func = unit_conversions[conv_key]
                 
-                # Single value field
-                if name in normalized and normalized[name] is not None:
+                # Numeric model fields are emitted as `<name>_value`.
+                value_key = name if name in normalized else f"{name}_value"
+                if value_key in normalized and normalized[value_key] is not None:
                     try:
-                        normalized[name] = conv_func(normalized[name])
+                        normalized[value_key] = conv_func(normalized[value_key])
                         normalized[key] = target_unit
                     except Exception as e:
                         logger.warning(f"Conversion failed for {name}: {e}")

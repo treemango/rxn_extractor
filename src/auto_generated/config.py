@@ -1,18 +1,16 @@
 import math
 
 DOMAIN_NAME = 'ethylene_conversion'
-DOMAIN_DESCRIPTION = 'Extraction of catalytic data for ethylene conversion reactions, including catalyst properties and performance metrics.'
+DOMAIN_DESCRIPTION = 'Extraction of catalyst identity, preparation, characterization, and ethylene reaction conditions.'
 INPUT_MARKDOWN_DIR = 'markdowns/'
-TARGET_REACTION = 'oligomerization of ethylene to produce C6-C12 olefins'
+TARGET_REACTION = 'oligomerization of ethylene to produce C6-C12 olefins, or any reaction involving ethylene conversion to higher hydrocarbons.'
 
 SUB_DOMAIN_NAMES = {
     "catalyst": "Catalyst Properties",
-    "conditions": "Reaction Conditions",
-    "performance": "Catalytic Performance",
-    "metadata": "Paper Metadata"
+    "conditions": "Reaction Conditions"
 }
 
-VALIDATION_BOUNDS = {'catalyst.surface_area': {'min': 0.1, 'max': 3000, 'target_unit': 'm2/g', 'allowed_units': ['m2/g', 'm²/g']}, 'conditions.temperature': {'min': -50, 'max': 1500, 'target_unit': 'Celsius', 'allowed_units': ['Celsius', 'Kelvin']}, 'conditions.pressure': {'min': 0.01, 'max': 1000, 'target_unit': 'atm', 'allowed_units': ['atm', 'bar', 'MPa', 'psi', 'kPa']}, 'conditions.space_velocity': {'min': 0.01, 'max': 1000000, 'target_unit': 'h-1', 'allowed_units': ['h-1', 'mL/g/h', 'L/kg/h', 'WHSV', 'GHSV']}, 'conditions.testing_time': {'min': 0.01, 'max': 10000, 'target_unit': 'hours', 'allowed_units': ['hours', 'days', 'minutes']}, 'performance.ethylene_conversion': {'min': 0, 'max': 100, 'target_unit': '%', 'allowed_units': ['%']}, 'performance.c8_c16_selectivity': {'min': 0, 'max': 100, 'target_unit': '%', 'allowed_units': ['%']}, 'performance.isomers_selectivity': {'min': 0, 'max': 100, 'target_unit': '%', 'allowed_units': ['%']}, 'performance.yield': {'min': 0, 'max': 100, 'target_unit': '%', 'allowed_units': ['%']}, 'performance.reaction_rate': {'min': 0, 'max': None, 'target_unit': 'mol/g/h', 'allowed_units': ['mol/g/h', 'mmol/g/h', 'g/g/h']}, 'performance.turnover_frequency': {'min': 0, 'max': None, 'target_unit': 's-1', 'allowed_units': ['s-1', 'h-1']}, 'metadata.year_of_publication': {'min': 1900, 'max': 2100, 'target_unit': None, 'allowed_units': []}}
+VALIDATION_BOUNDS = {'catalyst.surface_area': {'min': 0, 'max': 3000, 'target_unit': None, 'allowed_units': ['m2/g', 'm²/g']}, 'conditions.temperature': {'min': -50, 'max': 1500, 'target_unit': 'Celsius', 'allowed_units': ['Celsius', 'Kelvin']}, 'conditions.total_pressure': {'min': 0.01, 'max': 1000, 'target_unit': 'atm', 'allowed_units': ['atm', 'bar', 'MPa', 'psi', 'kPa']}, 'conditions.ethylene_partial_pressure': {'min': 0.01, 'max': 1000, 'target_unit': 'atm', 'allowed_units': ['atm', 'bar', 'MPa', 'psi', 'kPa']}, 'conditions.whsv': {'min': 0.01, 'max': 1000000, 'target_unit': None, 'allowed_units': ['h-1', 'h⁻¹', 'g_feed/g_cat/h', 'g_feed g_cat-1 h-1', 'WHSV']}, 'conditions.ghsv': {'min': 0.01, 'max': 1000000, 'target_unit': None, 'allowed_units': ['h-1', 'h⁻¹', 'mL/g/h', 'L/kg/h', 'mL/mL/h', 'cm3/cm3/h', 'GHSV']}, 'conditions.time_on_stream': {'min': 0.01, 'max': 10000, 'target_unit': 'hours', 'allowed_units': ['hours', 'days', 'minutes', 'seconds']}}
 
 UNIT_CONVERSIONS = {
     ('K', 'Celsius'): lambda x: x - 273.15,

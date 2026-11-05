@@ -22,24 +22,31 @@ Extract data ONLY for that specific experiment. Ignore all others.
   Preferred output unit: Celsius
   Valid range: -50 to 1500 Celsius
 
-### `pressure` (float)
-  Operating pressure
+### `total_pressure` (float)
+  Total reactor pressure, not ethylene partial pressure.
   Accepted units: atm, bar, MPa, psi, kPa
   Preferred output unit: atm
   Valid range: 0.01 to 1000 atm
 
-### `space_velocity` (float)
-  Space velocity (WHSV, GHSV, etc.)
-  Accepted units: h-1, mL/g/h, L/kg/h, WHSV, GHSV
-  Preferred output unit: h-1
-  Valid range: 0.01 to 1000000 h-1
+### `ethylene_partial_pressure` (float)
+  Ethylene partial pressure; do not copy total pressure unless explicitly identified as ethylene partial pressure.
+  Accepted units: atm, bar, MPa, psi, kPa
+  Preferred output unit: atm
+  Valid range: 0.01 to 1000 atm
 
-### `feed_composition` (string)
-  Composition of the feed gas/liquid (e.g., '10% C2H4 in Ar')
+### `whsv` (float)
+  Weight hourly space velocity (WHSV), not GHSV; preserve the reported unit and basis.
+  Accepted units: h-1, h⁻¹, g_feed/g_cat/h, g_feed g_cat-1 h-1, WHSV
+  Valid range: 0.01 to 1000000 None
 
-### `testing_time` (range)
-  Time on stream or duration the catalyst was tested
-  Accepted units: hours, days, minutes
+### `ghsv` (float)
+  Gas hourly space velocity (GHSV), not WHSV; preserve the reported unit and basis.
+  Accepted units: h-1, h⁻¹, mL/g/h, L/kg/h, mL/mL/h, cm3/cm3/h, GHSV
+  Valid range: 0.01 to 1000000 None
+
+### `time_on_stream` (range)
+  Time-on-stream for this reaction experiment; capture a range where reported.
+  Accepted units: hours, days, minutes, seconds
   Preferred output unit: hours
   Valid range: 0.01 to 10000 hours
 
@@ -67,14 +74,17 @@ Extract data ONLY for that specific experiment. Ignore all others.
   "temperature_min": 80.0,
   "temperature_max": 105.0,
   "temperature_unit": "Celsius",
-  "pressure_value": 52.0,
-  "pressure_unit": "atm",
-  "space_velocity_value": 52.0,
-  "space_velocity_unit": "h-1",
-  "feed_composition": "example value",
-  "testing_time_min": 80.0,
-  "testing_time_max": 105.0,
-  "testing_time_unit": "hours"
+  "total_pressure_value": 52.0,
+  "total_pressure_unit": "atm",
+  "ethylene_partial_pressure_value": 52.0,
+  "ethylene_partial_pressure_unit": "atm",
+  "whsv_value": 52.0,
+  "whsv_unit": null,
+  "ghsv_value": 52.0,
+  "ghsv_unit": null,
+  "time_on_stream_min": 80.0,
+  "time_on_stream_max": 105.0,
+  "time_on_stream_unit": "hours"
 }
 ```
 

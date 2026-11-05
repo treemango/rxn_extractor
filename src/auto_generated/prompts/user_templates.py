@@ -10,7 +10,7 @@ Specifically look for:
 - Any reported yield, conversion, selectivity, temperature, or pressure values
 - Each unique catalyst + condition combination = one experiment
 
-PAPER CONTENT:
+SELECTED PAPER SECTIONS (Markdown headings and source text; references are excluded):
 {paper_content}
 
 Remember: Return ONLY the JSON object with keys:
@@ -18,8 +18,9 @@ Remember: Return ONLY the JSON object with keys:
 """
 
 SUBDOMAIN_USER_TEMPLATE = """
-You will receive a TARGET EXPERIMENT block at the top, followed by the
-full paper text. Extract data ONLY for the specified target experiment.
+You will receive a TARGET EXPERIMENT block at the top, followed by
+task-relevant Markdown section blocks. Extract data ONLY for the specified
+target experiment and use only the supplied sections as evidence.
 
 {experiment_text}
 """

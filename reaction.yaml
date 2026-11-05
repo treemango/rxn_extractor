@@ -2,9 +2,9 @@
 # DOMAIN DEFINITION: Ethylene Conversion
 # ============================================================================
 domain_name: "ethylene_conversion"
-domain_description: "Extraction of catalytic data for ethylene conversion reactions, including catalyst properties and performance metrics."
+domain_description: "Extraction of catalyst identity, preparation, characterization, and ethylene reaction conditions."
 target_reaction: "oligomerization of ethylene to produce C6-C12 olefins, or any reaction involving ethylene conversion to higher hydrocarbons."
-input_markdown_dir: "markdowns/"
+input_markdown_dir: "markdowns2/"
 
 # ============================================================================
 # PARSER AGENT CONFIGURATION
@@ -14,10 +14,11 @@ parser:
     You are an expert chemical engineering researcher specializing in ethylene conversion and catalytic reactions.
   task_description: >
     Extract and enumerate distinct experiments from a research paper.
-    Each unique catalytic configuration or set of reaction conditions = 1 experiment.
+    Each unique catalyst formulation or set of reaction conditions = 1 experiment.
   experiment_differentiators:
-    - "Different catalyst formulations, active metals, or supports"
-    - "Different reaction conditions (temperature, pressure, space velocity)"
+    - "Different catalyst classes, active metals, supports, or metal loadings"
+    - "Different preparation, pretreatment, or activation methods"
+    - "Different reaction conditions (temperature, total or ethylene partial pressure, WHSV, GHSV)"
   few_shot_examples:
     - input: >
         "We tested Ni/Al2O3 and Pt/Al2O3 at 200°C."
@@ -37,21 +38,13 @@ sub_domains:
     role_description: >
       You are an expert in heterogeneous catalysis and material characterization.
     task_description: >
-      Extract catalyst design and characterization properties for the specific experiment.
+      Extract catalyst identity, preparation, activation, and physicochemical/acid-site characterization for the specific experiment.
     extraction_rules:
-      - "Extract precise names and structural properties."
+      - "Keep the reported units for numeric characterization values; do not convert unlike measurement bases."
+      - "Distinguish total acidity measured by NH3-TPD from Brønsted/Lewis acid-site densities measured by pyridine-IR."
       - "If a value is not stated, return null — NEVER invent data."
       - "Always provide an exact quote from the paper."
     fields:
-      - name: "catalyst_name"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Exact formulation (e.g., Ni/Al2O3, zeolite-Y)"
-        ui_render: "text_input"
-        
       - name: "catalyst_class"
         type: "string"
         target_unit: null
@@ -59,15 +52,6 @@ sub_domains:
         min: null
         max: null
         prompt_hint: "Class of catalyst (e.g., heterogeneous, M-M oxide, MOF)"
-        ui_render: "text_input"
-        
-      - name: "exposed_facet"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Specific exposed crystal facet (e.g., (111), (100))"
         ui_render: "text_input"
         
       - name: "active_metal"
@@ -80,49 +64,94 @@ sub_domains:
         ui_render: "text_input"
         
       - name: "metal_loading"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Metal loading fraction or wt% (e.g., '5 wt%', 'Ni/Al fraction')"
-        ui_render: "text_input"
-        
-      - name: "support"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "The catalyst support material (e.g., Al2O3, SiO2, Carbon)"
-        ui_render: "text_input"
-        
-      - name: "support_topology"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Topology or structure of the support (e.g., mesoporous, hierarchical)"
-        ui_render: "text_input"
-        
-      - name: "surface_area"
         type: "float"
-        target_unit: "m2/g"
-        allowed_units: ["m2/g", "m²/g"]
-        min: 0.1
-        max: 3000
-        prompt_hint: "BET surface area"
+        target_unit: null
+        allowed_units: ["wt%", "mass%", "at%", "mol%"]
+        min: null
+        max: null
+        prompt_hint: "Numeric loading of the active metal; report the stated basis as its unit (e.g., 5 wt%)."
         ui_render: "number_input"
         
-      - name: "catalyst_deactivation"
+      - name: "support_identity"
         type: "string"
         target_unit: null
         allowed_units: []
         min: null
         max: null
-        prompt_hint: "Notes on deactivation mechanism (e.g., coking, sintering) if mentioned"
+        prompt_hint: "Chemical identity and composition of the support (e.g., Al2O3, SiO2, carbon)."
+        ui_render: "text_input"
+        
+      - name: "preparation_method"
+        type: "string"
+        target_unit: null
+        allowed_units: []
+        min: null
+        max: null
+        prompt_hint: "Catalyst preparation or synthesis method (e.g., impregnation, co-precipitation)."
         ui_render: "text_area"
+
+      - name: "pretreatment_or_activation"
+        type: "string"
+        target_unit: null
+        allowed_units: []
+        min: null
+        max: null
+        prompt_hint: "Pretreatment or activation conditions/method, including gas, temperature, and duration when stated."
+        ui_render: "text_area"
+
+      - name: "surface_area"
+        type: "float"
+        target_unit: null
+        allowed_units: ["m2/g", "m²/g"]
+        min: 0
+        max: 3000
+        prompt_hint: "BET specific surface area; preserve the reported unit."
+        ui_render: "number_input"
+
+      - name: "pore_diameter"
+        type: "float"
+        target_unit: null
+        allowed_units: ["nm", "A", "Å", "angstrom", "um", "µm"]
+        min: null
+        max: null
+        prompt_hint: "Mean or characteristic pore diameter; preserve the reported unit."
+        ui_render: "number_input"
+
+      - name: "pore_volume"
+        type: "float"
+        target_unit: null
+        allowed_units: ["cm3/g", "cm³/g", "mL/g", "mm3/g", "mm³/g"]
+        min: null
+        max: null
+        prompt_hint: "Specific pore volume; preserve the reported unit."
+        ui_render: "number_input"
+
+      - name: "total_acidity"
+        type: "float"
+        target_unit: null
+        allowed_units: ["mmol/g", "umol/g", "µmol/g", "mmol/kg"]
+        min: null
+        max: null
+        prompt_hint: "Total acidity measured by NH3-TPD; do not substitute a different acidity method."
+        ui_render: "number_input"
+
+      - name: "bronsted_acid_site_density"
+        type: "float"
+        target_unit: null
+        allowed_units: ["mmol/g", "umol/g", "µmol/g", "umol/m2", "µmol/m²"]
+        min: null
+        max: null
+        prompt_hint: "Brønsted acid-site density measured by pyridine-IR; preserve the stated unit and basis."
+        ui_render: "number_input"
+
+      - name: "lewis_acid_site_density"
+        type: "float"
+        target_unit: null
+        allowed_units: ["mmol/g", "umol/g", "µmol/g", "umol/m2", "µmol/m²"]
+        min: null
+        max: null
+        prompt_hint: "Lewis acid-site density; preserve the stated unit and measurement basis."
+        ui_render: "number_input"
 
   # --------------------------------------------------------------------------
   # 2: Reaction Conditions
@@ -155,157 +184,50 @@ sub_domains:
         prompt_hint: "Reaction temperature"
         ui_render: "range_input"
         
-      - name: "pressure"
+      - name: "total_pressure"
         type: "float"
         target_unit: "atm"
         allowed_units: ["atm", "bar", "MPa", "psi", "kPa"]
         min: 0.01
         max: 1000
-        prompt_hint: "Operating pressure"
+        prompt_hint: "Total reactor pressure, not ethylene partial pressure."
+        ui_render: "number_input"
+
+      - name: "ethylene_partial_pressure"
+        type: "float"
+        target_unit: "atm"
+        allowed_units: ["atm", "bar", "MPa", "psi", "kPa"]
+        min: 0.01
+        max: 1000
+        prompt_hint: "Ethylene partial pressure; do not copy total pressure unless explicitly identified as ethylene partial pressure."
         ui_render: "number_input"
         
-      - name: "space_velocity"
+      - name: "whsv"
         type: "float"
-        target_unit: "h-1"
-        allowed_units: ["h-1", "mL/g/h", "L/kg/h", "WHSV", "GHSV"]
+        target_unit: null
+        allowed_units: ["h-1", "h⁻¹", "g_feed/g_cat/h", "g_feed g_cat-1 h-1", "WHSV"]
         min: 0.01
         max: 1000000
-        prompt_hint: "Space velocity (WHSV, GHSV, etc.)"
+        prompt_hint: "Weight hourly space velocity (WHSV), not GHSV; preserve the reported unit and basis."
         ui_render: "number_input"
-        
-      - name: "feed_composition"
-        type: "string"
+
+      - name: "ghsv"
+        type: "float"
         target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Composition of the feed gas/liquid (e.g., '10% C2H4 in Ar')"
-        ui_render: "text_input"
-        
-      - name: "testing_time"
+        allowed_units: ["h-1", "h⁻¹", "mL/g/h", "L/kg/h", "mL/mL/h", "cm3/cm3/h", "GHSV"]
+        min: 0.01
+        max: 1000000
+        prompt_hint: "Gas hourly space velocity (GHSV), not WHSV; preserve the reported unit and basis."
+        ui_render: "number_input"
+
+      - name: "time_on_stream"
         type: "range"
         target_unit: "hours"
-        allowed_units: ["hours", "days", "minutes"]
+        allowed_units: ["hours", "days", "minutes", "seconds"]
         min: 0.01
         max: 10000
-        prompt_hint: "Time on stream or duration the catalyst was tested"
+        prompt_hint: "Time-on-stream for this reaction experiment; capture a range where reported."
         ui_render: "range_input"
-
-  # --------------------------------------------------------------------------
-  # 3: Catalytic Performance
-  # --------------------------------------------------------------------------
-  - name: "performance"
-    display_name: "Catalytic Performance"
-    role_description: >
-      You are an expert in catalytic performance evaluation and kinetics.
-    task_description: >
-      Extract conversion, selectivity, and kinetic parameters.
-    extraction_rules:
-      - "Ensure percentage values are between 0 and 100."
-      - "Always provide an exact quote from the paper."
-    fields:
-      - name: "ethylene_conversion"
-        type: "float"
-        target_unit: "%"
-        allowed_units: ["%"]
-        min: 0
-        max: 100
-        prompt_hint: "Ethylene conversion percentage"
-        ui_render: "number_input"
-        
-      - name: "c8_c16_selectivity"
-        type: "float"
-        target_unit: "%"
-        allowed_units: ["%"]
-        min: 0
-        max: 100
-        prompt_hint: "Selectivity towards C8-C16 products"
-        ui_render: "number_input"
-        
-      - name: "isomers_selectivity"
-        type: "float"
-        target_unit: "%"
-        allowed_units: ["%"]
-        min: 0
-        max: 100
-        prompt_hint: "Selectivity towards specific isomers (mention which ones in quote)"
-        ui_render: "number_input"
-        
-      - name: "yield"
-        type: "float"
-        target_unit: "%"
-        allowed_units: ["%"]
-        min: 0
-        max: 100
-        prompt_hint: "Overall product yield percentage"
-        ui_render: "number_input"
-        
-      - name: "reaction_rate"
-        type: "float"
-        target_unit: "mol/g/h"
-        allowed_units: ["mol/g/h", "mmol/g/h", "g/g/h"]
-        min: 0
-        max: null
-        prompt_hint: "Specific reaction rate"
-        ui_render: "number_input"
-        
-      - name: "turnover_frequency"
-        type: "float"
-        target_unit: "s-1"
-        allowed_units: ["s-1", "h-1"]
-        min: 0
-        max: null
-        prompt_hint: "Turnover frequency (TOF)"
-        ui_render: "number_input"
-        
-      - name: "specific_mechanism"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Proposed reaction mechanism (e.g., Cossee-Arlman, metallacycle)"
-        ui_render: "text_area"
-
-  # --------------------------------------------------------------------------
-  # 4: Paper Metadata
-  # --------------------------------------------------------------------------
-  - name: "metadata"
-    display_name: "Paper Metadata"
-    role_description: >
-      You are an expert in academic literature and bibliography.
-    task_description: >
-      Extract publication metadata for this paper.
-    extraction_rules:
-      - "Extract DOI, journal, and year accurately."
-      - "Always provide an exact quote showing where this info was found."
-    fields:
-      - name: "doi"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Digital Object Identifier (DOI)"
-        ui_render: "text_input"
-        
-      - name: "year_of_publication"
-        type: "float"
-        target_unit: null
-        allowed_units: []
-        min: 1900
-        max: 2100
-        prompt_hint: "Publication year (e.g., 2023)"
-        ui_render: "number_input"
-        
-      - name: "journal"
-        type: "string"
-        target_unit: null
-        allowed_units: []
-        min: null
-        max: null
-        prompt_hint: "Name of the academic journal"
-        ui_render: "text_input"
 
 # ============================================================================
 # CONFIGURATION
