@@ -1,5 +1,6 @@
 import logging
 import importlib
+import os
 from typing import Optional, Type, Dict, Any, List
 from pydantic import BaseModel
 
@@ -10,6 +11,9 @@ from src.agents.parser_agent import ParserAgent
 from src.pipeline.file_reader import index_markdown_sections, select_sections
 
 logger = logging.getLogger(__name__)
+DEBUG_SECTION_CONTENT = os.getenv("DEBUG_SECTION_CONTENT", "0").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 
 class Extractor:
     """Generic multi-agent orchestrator that loops through sub-domains."""
@@ -123,6 +127,12 @@ class Extractor:
             ",".join(parser_selection.section_ids),
             len(parser_selection.text) // 4,
         )
+        if DEBUG_SECTION_CONTENT:
+            logger.info(
+                "DEBUG section content | paper=%s | stage=parser\n%s",
+                paper_id,
+                parser_selection.text,
+            )
         parser_output = parser_agent.parse(parser_selection.text, paper_id)
         if not parser_output or not hasattr(parser_output, 'experiments'):
             return []
@@ -199,6 +209,15 @@ class Extractor:
                     ",".join(selection.section_ids),
                     estimated_tokens,
                 )
+                if DEBUG_SECTION_CONTENT:
+                    logger.info(
+                        "DEBUG section content | paper=%s | experiment=%s | "
+                        "sub_domain=%s\n%s",
+                        paper_id,
+                        exp_num,
+                        sub_domain,
+                        selection.text,
+                    )
 
             result = self.extract_experiment(
                 context_hint,

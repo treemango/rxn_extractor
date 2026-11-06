@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from src.agents import extractor as extractor_module
 from src.agents.extractor import Extractor
 from src.pipeline.file_reader import index_markdown_sections, select_sections
 
@@ -79,7 +80,9 @@ def test_unknown_headings_fall_back_to_non_reference_sections():
     assert "SECTION SELECTION FALLBACK" in selection.text
 
 
-def test_extractor_passes_selected_evidence_not_full_paper():
+def test_extractor_passes_selected_evidence_not_full_paper(monkeypatch, caplog):
+    monkeypatch.setattr(extractor_module, "DEBUG_SECTION_CONTENT", True)
+    caplog.set_level("INFO")
     paper = """# Paper title
 ## Introduction
 INTRODUCTION_ONLY
@@ -146,3 +149,6 @@ REFERENCE_ONLY
     assert "INTRODUCTION_ONLY" not in message
     assert "REFERENCE_ONLY" not in message
     assert "FULL PAPER TEXT" not in message
+    assert "DEBUG section content | paper=1 | stage=parser" in caplog.text
+    assert "DEBUG section content | paper=1 | experiment=1 | sub_domain=performance" in caplog.text
+    assert "TARGET_RESULT" in caplog.text

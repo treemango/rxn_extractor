@@ -11,6 +11,9 @@
 
     # 1. Force Python to flush every print/log statement immediately
     export PYTHONUNBUFFERED=1
+
+    # Opt in with: qsub -v DEBUG_SECTION_CONTENT=1 extractor.sh
+    export DEBUG_SECTION_CONTENT="${DEBUG_SECTION_CONTENT:-0}"
     
     # 2. Tell PBS not to hold back output (direct streaming)
     #PBS -k oe
@@ -41,7 +44,7 @@
     nvidia-smi
 
     echo "=== Running Batch Extraction ==="
-    python -u run_batch.py
+    set -o pipefail
+    python -u run_batch.py 2>&1 | tee "logs/extractor_${PBS_JOBID:-local}.log"
 
     echo "=== Job Finished at: $(date) ==="
-
