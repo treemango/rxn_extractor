@@ -115,7 +115,9 @@ def select_sections(
         section for section in sections
         if not any(_REFERENCE_HEADING.search(heading) for heading in section.heading_path)
     ]
-    normalized_aliases = tuple(_normalize_text(alias) for alias in aliases)
+    normalized_aliases = tuple(
+        _normalize_text(alias) for alias in ("abstract", *aliases)
+    )
     matched = [
         section for section in eligible
         if (

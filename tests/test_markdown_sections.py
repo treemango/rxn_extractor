@@ -67,6 +67,21 @@ def test_metadata_selection_uses_front_matter_without_results():
     assert "Result data" not in selection.text
 
 
+def test_abstract_section_is_selected_for_parser_and_extraction_prompts():
+    sections = index_markdown_sections(
+        "# Paper title\nTitle and author details.\n"
+        "## Abstract\nABSTRACT_EVIDENCE\n"
+        "## Experimental\nEXPERIMENTAL_EVIDENCE\n"
+        "## Results\nRESULTS_EVIDENCE."
+    )
+
+    for purpose in ("parser", "catalyst", "conditions"):
+        selection = select_sections(sections, purpose)
+        assert "ABSTRACT_EVIDENCE" in selection.text
+
+    assert "RESULTS_EVIDENCE" not in select_sections(sections, "catalyst").text
+
+
 def test_unknown_headings_fall_back_to_non_reference_sections():
     sections = index_markdown_sections(
         "# Paper\nContent.\n## Unusual section\nUseful evidence.\n## References\nCitations."
