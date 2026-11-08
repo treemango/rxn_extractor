@@ -47,7 +47,7 @@ for row in rows:
 dynamic_keys = sorted(list(all_keys - set(base_columns)))
 fieldnames = base_columns + dynamic_keys
 
-with open(output_file, "w", newline="", encoding="utf-8") as f:
+with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(flattened_rows)
