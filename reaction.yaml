@@ -2,8 +2,8 @@
 # DOMAIN DEFINITION: Ethylene Conversion
 # ============================================================================
 domain_name: "ethylene_conversion"
-domain_description: "Extraction of catalyst identity, preparation, characterization, and ethylene reaction conditions."
-target_reaction: "oligomerization of ethylene to produce C6-C12 olefins, or any reaction involving ethylene conversion to higher hydrocarbons."
+domain_description: "Extraction of catalyst identity, preparation, characterization, and reaction conditions for heterogeneous ethylene conversion."
+target_reaction: "heterogeneous-catalyzed oligomerization of ethylene to produce C6-C12 olefins, using a solid catalyst phase."
 input_markdown_dir: "markdowns2/"
 
 # ============================================================================
@@ -11,12 +11,19 @@ input_markdown_dir: "markdowns2/"
 # ============================================================================
 parser:
   role_description: >
-    You are an expert chemical engineering researcher specializing in ethylene conversion and catalytic reactions.
+    You are an expert chemical engineering researcher specializing in heterogeneous catalysis and ethylene conversion.
   task_description: >
-    Extract and enumerate distinct experiments from a research paper.
-    Each unique catalyst formulation or set of reaction conditions = 1 experiment.
+    Extract and enumerate only physical ethylene conversion experiments performed with a heterogeneous catalyst.
+    Include an experiment only when the catalyst is explicitly a solid phase distinct from the reacting fluid.
+  eligibility_rules:
+    - "Include solid catalysts such as supported metals, metal oxides, zeolites, solid acids, and other solid materials when used to catalyze ethylene conversion."
+    - "Exclude homogeneous catalysts dissolved in the reaction phase, including soluble molecular nickel or other organometallic complexes with ligands."
+    - "Do not infer heterogeneity merely because a catalyst contains a metal or is called a catalyst; require explicit evidence of a separate solid catalyst phase."
+    - "Exclude theoretical, computational, review, catalyst-synthesis-only, and prior-literature experiments that are not heterogeneous ethylene conversion runs performed in the paper."
+    - "If catalyst phase cannot be established from the supplied paper sections, exclude the experiment rather than assume it is heterogeneous."
+  include_worked_examples: false
   experiment_differentiators:
-    - "Different catalyst classes, active metals, supports, or metal loadings"
+    - "Different solid catalyst classes, active metals, supports, or metal loadings"
     - "Different preparation, pretreatment, or activation methods"
     - "Different reaction conditions (temperature, total or ethylene partial pressure, WHSV, GHSV)"
   few_shot_examples:
@@ -29,7 +36,6 @@ parser:
 # SUB-DOMAIN DEFINITIONS
 # ============================================================================
 sub_domains:
-
   # --------------------------------------------------------------------------
   # 1: Catalyst Properties
   # --------------------------------------------------------------------------
@@ -53,7 +59,16 @@ sub_domains:
         max: null
         prompt_hint: "Class of catalyst (e.g., heterogeneous, M-M oxide, MOF)"
         ui_render: "text_input"
-        
+
+      - name: "catalyst_name"
+        type: "string"
+        target_unit: null
+        allowed_units: []
+        min: null
+        max: null
+        prompt_hint: "Exact name or formulation of the heterogeneous catalyst as reported (e.g., Ni/Al2O3, H-ZSM-5, NiMo/SiO2-Al2O3). If the paper simply says N1 or C1, go through the paper to find the full name or formulation."
+        ui_render: "text_input"
+
       - name: "active_metal"
         type: "string"
         target_unit: null
@@ -62,7 +77,7 @@ sub_domains:
         max: null
         prompt_hint: "The main active metal (e.g., Ni, Pt, Pd)"
         ui_render: "text_input"
-        
+
       - name: "metal_loading"
         type: "float"
         target_unit: null
@@ -71,7 +86,7 @@ sub_domains:
         max: null
         prompt_hint: "Numeric loading of the active metal; report the stated basis as its unit (e.g., 5 wt%)."
         ui_render: "number_input"
-        
+
       - name: "support_identity"
         type: "string"
         target_unit: null
@@ -80,7 +95,7 @@ sub_domains:
         max: null
         prompt_hint: "Chemical identity and composition of the support (e.g., Al2O3, SiO2, carbon)."
         ui_render: "text_input"
-        
+
       - name: "preparation_method"
         type: "string"
         target_unit: null
@@ -174,7 +189,7 @@ sub_domains:
         max: null
         prompt_hint: "Type of reactor (e.g., fixed-bed, batch, continuous)"
         ui_render: "text_input"
-        
+
       - name: "temperature"
         type: "range"
         target_unit: "Celsius"
@@ -183,7 +198,7 @@ sub_domains:
         max: 1500
         prompt_hint: "Reaction temperature"
         ui_render: "range_input"
-        
+
       - name: "total_pressure"
         type: "float"
         target_unit: "atm"
@@ -201,11 +216,12 @@ sub_domains:
         max: 1000
         prompt_hint: "Ethylene partial pressure; do not copy total pressure unless explicitly identified as ethylene partial pressure."
         ui_render: "number_input"
-        
+
       - name: "whsv"
         type: "float"
         target_unit: null
-        allowed_units: ["h-1", "h⁻¹", "g_feed/g_cat/h", "g_feed g_cat-1 h-1", "WHSV"]
+        allowed_units:
+          ["h-1", "h⁻¹", "g_feed/g_cat/h", "g_feed g_cat-1 h-1", "WHSV"]
         min: 0.01
         max: 1000000
         prompt_hint: "Weight hourly space velocity (WHSV), not GHSV; preserve the reported unit and basis."
@@ -214,7 +230,8 @@ sub_domains:
       - name: "ghsv"
         type: "float"
         target_unit: null
-        allowed_units: ["h-1", "h⁻¹", "mL/g/h", "L/kg/h", "mL/mL/h", "cm3/cm3/h", "GHSV"]
+        allowed_units:
+          ["h-1", "h⁻¹", "mL/g/h", "L/kg/h", "mL/mL/h", "cm3/cm3/h", "GHSV"]
         min: 0.01
         max: 1000000
         prompt_hint: "Gas hourly space velocity (GHSV), not WHSV; preserve the reported unit and basis."

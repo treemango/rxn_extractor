@@ -299,6 +299,8 @@ def generate_prompts(domain: Dict[str, Any], output_dir: str) -> None:
     # ── Collect info from domain for contextualising examples ────────────────
     parser     = domain.get('parser', {})
     differentiators = parser.get('experiment_differentiators', [])
+    eligibility_rules = parser.get('eligibility_rules', [])
+    include_worked_examples = parser.get('include_worked_examples', True)
     sub_names  = [s['name'] for s in domain.get('sub_domains', [])]
 
     # Fix "You are " prefix: role_description in YAML starts with
@@ -314,6 +316,8 @@ def generate_prompts(domain: Dict[str, Any], output_dir: str) -> None:
     task_sentence  = parser.get('task_description', 'Extract and enumerate distinct experiments.').strip()
 
     differentiator_lines = '\n'.join(f'- {d}' for d in differentiators)
+    eligibility_lines = '\n'.join(f'- {rule}' for rule in eligibility_rules)
+    worked_examples = _PARSER_EXAMPLES if include_worked_examples else ""
 
     # Build the JSON schema example using actual sub-domain names
     schema_example = json.dumps(
@@ -322,26 +326,26 @@ def generate_prompts(domain: Dict[str, Any], output_dir: str) -> None:
             "experiments": [
                 {
                     "experiment_number": 1,
-                    "brief_description": "Catalyst A tested at 80°C under 30 atm",
-                    "catalyst_name": "Catalyst A / Ni(COD)2",
+                    "brief_description": "Ni/Al2O3 tested at 80°C under 30 atm",
+                    "catalyst_name": "Ni/Al2O3",
                     "reactant": "ethylene",
                     "main_temperature": "80°C",
                     "main_pressure": "30 atm",
                     "products_mentioned": "butene-1, hexene-1",
                     "key_section": "Table 1, Row 1",
-                    "key_parameters": "catalyst=CatalystA, temp=80°C, TOF=52 h-1",
+                    "key_parameters": "catalyst=Ni/Al2O3, temp=80°C, TOF=52 h-1",
                     "confidence": 5
                 },
                 {
                     "experiment_number": 2,
-                    "brief_description": "Catalyst B tested at 80°C under 30 atm",
-                    "catalyst_name": "Catalyst B / Ni(COD)2",
+                    "brief_description": "Pt/Al2O3 tested at 80°C under 30 atm",
+                    "catalyst_name": "Pt/Al2O3",
                     "reactant": "ethylene",
                     "main_temperature": "80°C",
                     "main_pressure": "30 atm",
                     "products_mentioned": "butene-1, hexene-1",
                     "key_section": "Table 1, Row 2",
-                    "key_parameters": "catalyst=CatalystB, temp=80°C, TOF=411 h-1",
+                    "key_parameters": "catalyst=Pt/Al2O3, temp=80°C, TOF=411 h-1",
                     "confidence": 5
                 }
             ],
@@ -357,10 +361,16 @@ Find and list every distinct experiment in the paper. Do NOT summarize the paper
 Do NOT return the title, abstract, authors, keywords, or references.
 ONLY return the JSON object described below.
 
+## TASK
+{task_sentence}
+
+## HETEROGENEOUS-CATALYST ELIGIBILITY
+{eligibility_lines}
+
 ## WHAT COUNTS AS ONE EXPERIMENT
-Any physical catalytic run, reaction test, or synthesis where at least ONE of these
-is mentioned: a catalyst name, a reaction temperature, a product yield, or a
-conversion/selectivity value.
+Only a physical ethylene conversion run that meets the heterogeneous-catalyst
+eligibility rules above. Do not count catalyst synthesis or characterization as
+a reaction experiment.
 
 ## WHAT MAKES TWO SEPARATE EXPERIMENTS
 {differentiator_lines}
@@ -375,7 +385,7 @@ conversion/selectivity value.
 ## FIELD DEFINITIONS
 - **experiment_number**: Sequential integer starting at 1.
 - **brief_description**: One English sentence — catalyst name + reaction + key condition.
-- **catalyst_name**: Exact catalyst identifier as written (e.g. "1/Ni(COD)2", "Ni/Al2O3").
+- **catalyst_name**: Exact catalyst identifier as written (e.g. "Ni/Al2O3", "Ni/H-ZSM-5").
 - **reactant**: Primary feedstock (e.g. "ethylene", "HDPE", "propylene").
 - **main_temperature**: Temperature as written (e.g. "80°C", "80-105°C"). null if not stated.
 - **main_pressure**: Pressure as written (e.g. "30 atm", "20-35 atm"). null if not stated.
@@ -389,15 +399,15 @@ conversion/selectivity value.
 ## STRICT RULES
 - Respond in English regardless of the input paper language.
 - For null fields: write null (not empty string "").
-- If the paper has NO physical experiments (pure theory, DFT, review, synthesis-only
-  with no catalytic test), return: {{"total_experiments": 0, "experiments": [], "extraction_notes": "No physical experiments."}}
+- If the paper has no eligible heterogeneous ethylene-conversion experiment, return:
+  {{"total_experiments": 0, "experiments": [], "extraction_notes": "No eligible heterogeneous-catalyst ethylene conversion experiments."}}
 - Return ONLY the JSON object. No explanation, no markdown fences.
 
-{_PARSER_EXAMPLES}
+{worked_examples}
 """
 
     with open(os.path.join(output_dir, 'parser.md'), 'w', encoding='utf-8') as f:
-        f.write(parser_content)
+        f.write(parser_content.rstrip() + "\n")
 
     # ── Subdomain prompts ─────────────────────────────────────────────────────
     for sub in domain.get('sub_domains', []):

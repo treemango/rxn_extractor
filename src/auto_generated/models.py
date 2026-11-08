@@ -8,6 +8,7 @@ class CatalystExtraction(BaseModel):
     model_config = {'extra': 'ignore'}  # silently drop unknown keys from LLM
 
     catalyst_class: Optional[str] = Field(None)
+    catalyst_name: Optional[str] = Field(None)
     active_metal: Optional[str] = Field(None)
     metal_loading_value: Optional[float] = Field(None)
     metal_loading_unit: Optional[str] = Field(None)

@@ -16,6 +16,9 @@ Extract data ONLY for that specific experiment. Ignore all others.
 ### `catalyst_class` (string)
   Class of catalyst (e.g., heterogeneous, M-M oxide, MOF)
 
+### `catalyst_name` (string)
+  Exact name or formulation of the heterogeneous catalyst as reported (e.g., Ni/Al2O3, H-ZSM-5, NiMo/SiO2-Al2O3).
+
 ### `active_metal` (string)
   The main active metal (e.g., Ni, Pt, Pd)
 
@@ -80,6 +83,7 @@ Extract data ONLY for that specific experiment. Ignore all others.
   "confidence_score": 5,
   "source_quote": "exact sentence from paper",
   "catalyst_class": "example value",
+  "catalyst_name": "example value",
   "active_metal": "example value",
   "metal_loading_value": 52.0,
   "metal_loading_unit": null,
