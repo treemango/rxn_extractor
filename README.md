@@ -8,12 +8,20 @@ Inference runs in-process with `llama-cpp-python` against `models/Qwen2.5-14B-In
 
 ## End-to-End Workflow
 
-```mermaid
-flowchart LR
-    A["📄 Download PDFs\ninto pdfs/"] --> B["qsub markdown_converter.sh\nDocling converts PDFs → markdowns/"]
-    B --> C["qsub extractor.sh\nLLM extracts experiments → data/"]
-    C --> D["python export_csv.py\nFlattens JSON column"]
-    D --> E["📊 data/flattened_results.csv\nReady for analysis"]
+```
+  PDFs in pdfs/
+       │
+       │  qsub markdown_converter.sh
+       ▼
+  Markdown files in markdowns/
+       │
+       │  qsub extractor.sh
+       ▼
+  data/papers.csv  +  data/experiments.csv
+       │
+       │  python export_csv.py
+       ▼
+  data/flattened_results.csv   ← ready for analysis
 ```
 
 **Step by step:**
