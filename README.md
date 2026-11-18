@@ -2,46 +2,65 @@
 
 `rxn_extractor` turns research papers into structured, experiment-level reaction data. A YAML domain definition describes the target reaction, extraction fields, units, and validation rules. The builder compiles that definition into Pydantic models, prompts, and configuration. The batch pipeline then finds experiments in paper Markdown, extracts the configured fields with a local Qwen GGUF model, normalizes values, validates them, and records the results in CSV files.
 
-The Aqua branch runs inference in-process with `llama-cpp-python` against `models/Qwen2.5-14B-Instruct-Q4_K_M.gguf`; it does not use Ollama or a separate model server. PBS scripts run PDF conversion and extraction as separate GPU jobs.
+Inference runs in-process with `llama-cpp-python` against `models/Qwen2.5-14B-Instruct-Q4_K_M.gguf`; no model server is required. PBS scripts submit PDF conversion and extraction as separate GPU jobs on the Aqua HPC cluster.
+
+---
+
+## End-to-End Workflow
+
+```mermaid
+flowchart LR
+    A["📄 Download PDFs\ninto pdfs/"] --> B["qsub markdown_converter.sh\nDocling converts PDFs → markdowns/"]
+    B --> C["qsub extractor.sh\nLLM extracts experiments → data/"]
+    C --> D["python export_csv.py\nFlattens JSON column"]
+    D --> E["📊 data/flattened_results.csv\nReady for analysis"]
+```
+
+**Step by step:**
+
+1. **Collect PDFs** — Place all source papers in `pdfs/`.
+2. **Convert to Markdown** — Submit `qsub markdown_converter.sh`. Docling reads from `pdfs/` and writes `.md` files to `markdowns/`. Wait for the job to complete before proceeding.
+3. **Extract reactions** — Submit `qsub extractor.sh`. The pipeline screens each paper for relevance, identifies individual experiments, and runs multi-agent extraction for each. Results are written to `data/papers.csv` and `data/experiments.csv`.
+4. **Flatten results** — Run `python export_csv.py` locally. This reads the JSON `data` column from `experiments.csv` and writes a wide, analysis-ready table to `data/flattened_results.csv`.
+5. **Use the data** — Open `data/flattened_results.csv` in Excel, pandas, or any analysis tool.
+
+---
 
 ## Project Tree
 
 ```text
 rxn_extractor/
 ├── reaction.yaml                  # Active reaction/domain definition
-├── domains/
-│   └── example_reaction.yaml      # Example schema
-├── pdfs/                          # Source PDF papers
+├── pdfs/                          # Source PDF papers (inputs)
 ├── markdowns/                     # Docling-converted papers; batch input
 ├── models/
 │   └── Qwen2.5-14B-Instruct-Q4_K_M.gguf
-├── data/                          # CSV results and review data
+├── data/                          # CSV results
 ├── checkpoints/                   # Batch resume state
 ├── logs/                          # PBS stdout/stderr targets
-├── run_batch.py                   # Batch extraction entry point
-├── markdown_converter.sh          # PBS PDF-to-Markdown job
-├── extractor.sh                   # PBS Markdown extraction job
-├── job.sh                         # Legacy combined job; not current workflow
-├── start.sh                       # Legacy local wrapper; not current Aqua workflow
-├── AQUA_RUNNING_INSTRUCTIONS.md   # Aqua setup and operations guide
+├── run_batch.py                   # Batch extraction entry point (called by extractor.sh)
+├── export_csv.py                  # Post-processing: flatten experiments.csv
+├── markdown_converter.sh          # PBS job: PDF → Markdown conversion
+├── extractor.sh                   # PBS job: Markdown → CSV extraction
+├── AQUA_RUNNING_INSTRUCTIONS.md   # Aqua cluster setup and operations guide
 ├── project.md                     # Detailed architecture and technical notes
 ├── config/
-│   └── settings.py                # Runtime settings
+│   └── settings.py                # Runtime settings (LLM, extraction, API)
 └── src/
     ├── builder/                   # Compile reaction.yaml into generated artifacts
     ├── auto_generated/            # Models, config, prompts, and review UI
-    ├── agents/                    # Filtering, experiment parsing, extraction
+    ├── agents/                    # Relevance filtering, experiment parsing, extraction
     ├── core/                      # Local LLM client, normalization, validation
-    ├── pipeline/                  # PDF conversion, file reading, batch control
-    ├── db/                        # CSV persistence
-    └── api/                       # Review dashboard API
+    ├── pipeline/                  # PDF conversion, file reading, batch orchestration
+    ├── db/                        # CSV persistence layer
+    └── api/                       # Human-in-the-loop review dashboard (FastAPI)
 ```
 
-## Basic Input and Output
+---
 
-### Inputs
+## Domain Definition (`reaction.yaml`)
 
-The domain definition is `reaction.yaml`. It identifies the reaction and Markdown input directory, then declares extraction sub-domains and fields. The active schema extracts catalyst identity/preparation/characterization and reaction conditions:
+The domain definition is the single configuration file that controls what gets extracted. It identifies the target reaction, the Markdown input directory, and declares sub-domains with their fields, units, and validation bounds. The active schema extracts catalyst identity/preparation/characterization and reaction conditions:
 
 ```yaml
 domain_name: "ethylene_conversion"
@@ -68,35 +87,35 @@ sub_domains:
         target_unit: "atm"
 ```
 
-This is a shortened illustration; use the complete schema in `reaction.yaml`. Put source PDFs in `pdfs/` for conversion, or provide converted `.md` papers in `markdowns/` for extraction. PDF conversion writes matching Markdown files to `markdowns/`; the extractor consumes Markdown, not PDFs.
+This is a shortened illustration; use the complete schema in `reaction.yaml`.
 
-If the schema changes, rebuild generated artifacts before extraction:
+If the schema changes, rebuild generated artifacts before submitting extraction:
 
 ```bash
 source ~/rxn_env/bin/activate
 python -m src.builder.cli
 ```
 
-The generated models, validation/conversion config, and prompts are written under `src/auto_generated/`. The builder leaves an existing UI scaffold unchanged. Generated files should be rebuilt from the YAML rather than edited by hand. Review the generated model and prompts, then run `python run_batch.py` (or use the PBS extraction job on Aqua). Existing CSV records are not migrated to a changed schema; archive or separate prior results before combining new runs.
+The generated models, validation/conversion config, and prompts are written under `src/auto_generated/`. Generated files should be rebuilt from the YAML rather than edited by hand. Existing CSV records are not migrated when the schema changes; archive prior results before combining runs.
 
-### Outputs
+---
+
+## Outputs
 
 The batch pipeline writes these files under `data/`:
 
-| File              | Contents                                                                       |
-| ----------------- | ------------------------------------------------------------------------------ |
-| `papers.csv`      | Paper identifiers, paths, processing status, and errors                        |
-| `experiments.csv` | One row per extracted experiment, with confidence and validation/review fields |
-| `batch_jobs.csv`  | Batch-level processing status and counts                                       |
-| `corrections.csv` | Human review corrections, when made through the review workflow                |
+| File                    | Contents                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `papers.csv`            | Paper identifiers, paths, processing status (pending / irrelevant / processed / error), and error messages |
+| `experiments.csv`       | One row per extracted experiment; confidence score, validation flags, and a JSON `data` column containing all extracted fields |
+| `batch_jobs.csv`        | Batch-level processing status and counts                                       |
+| `flattened_results.csv` | Generated by `export_csv.py`; wide table with one column per extracted field, ready for analysis |
 
-In `experiments.csv`, the `data` column contains a JSON-encoded object with the extracted values grouped by sub-domain. A simplified record looks like this:
+In `experiments.csv`, the `data` column contains a JSON-encoded object with extracted values grouped by sub-domain:
 
 ```json
 {
-  "paper_identifier": "sample-paper.md",
-  "experiment_number": 1,
-  "data": {
+  "sub_domain_results": {
     "catalyst": {
       "catalyst_class": "supported metal catalyst",
       "active_metal": "Ni",
@@ -112,30 +131,81 @@ In `experiments.csv`, the `data` column contains a JSON-encoded object with the 
     }
   },
   "overall_confidence": 4,
-  "validation_status": "...",
-  "needs_review": true
+  "validation": { ... }
 }
 ```
 
-The exact fields inside `data` follow the currently compiled domain schema. The CSV store creates its files on demand in `data/` (or in the directory selected by `DATA_DIR`). Batch resume state is stored in `checkpoints/latest.json`.
+Run `python export_csv.py` after a batch to get a flat, analysis-friendly version in `data/flattened_results.csv`.
+
+---
+
+## Pipeline Internals
+
+### Relevance filter
+
+Before any expensive extraction runs, `FilterAgent` checks the first ~4 000 characters of each paper (title, abstract, introduction) against the `target_reaction` defined in `reaction.yaml`. Papers that do not match are recorded in `papers.csv` with status `irrelevant` and skipped. This avoids running the full extraction pipeline on unrelated papers.
+
+### Experiment parsing
+
+`ParserAgent` reads section-aware text from the paper and asks the model to enumerate distinct physical experiments (not computational, review, or theoretical sections). Each experiment is returned with a brief description, key parameter hints, and a pointer to the paper section where it appears.
+
+### Sub-domain extraction
+
+`Extractor` loops over the sub-domains declared in `reaction.yaml`. For each experiment, it:
+1. Selects the most relevant Markdown sections for that sub-domain.
+2. Passes a structured context block (experiment description, catalyst, temperature, pressure, section pointer) together with the section text to the LLM.
+3. Validates the returned values against the bounds and rules in the domain config.
+4. Normalizes units to the `target_unit` declared in `reaction.yaml`.
+
+Results are assembled into a single dict per experiment and written to `experiments.csv`.
+
+### Checkpointing and resume
+
+The batch saves `checkpoints/latest.json` after every paper. To resume an interrupted run, pass `--resume` to `run_batch.py` (or leave the flag in `extractor.sh`).
+
+### Review dashboard
+
+`src/api/` provides a lightweight FastAPI dashboard for human-in-the-loop review of extracted experiments. Reviewers can inspect extracted values, flag issues, and submit corrections, which are recorded in `data/corrections.csv`.
+
+---
 
 ## Running on Aqua
 
-The current Aqua workflow uses PBS jobs, not `start.sh`:
+### Quick reference
 
-1. Place PDFs in `pdfs/`. If the schema has changed, run the builder with the project environment before submitting extraction.
-2. Submit PDF conversion with `qsub markdown_converter.sh` and wait for that job to finish.
-3. Submit extraction with `qsub extractor.sh`.
-4. Monitor jobs with `qstat -u "$USER"`; inspect `logs/batch_out.log` and `logs/batch_err.log` for output.
-5. Retrieve the resulting CSV files from `data/`.
+```bash
+# 1. Place PDFs in pdfs/
+# 2. Rebuild generated artifacts if reaction.yaml changed:
+source ~/rxn_env/bin/activate
+python -m src.builder.cli
 
-`markdown_converter.sh` converts PDFs to Markdown; `extractor.sh` processes Markdown and writes extraction records. They are separate jobs so extraction can start after conversion is complete. `job.sh` is currently out of date; the intended combined job will run the conversion stage first and then the extraction stage in sequence. The two current scripts also have distinct CUDA/runtime settings, so use the submitted scripts as the source of truth for the current setup.
+# 3. Submit PDF conversion job
+qsub markdown_converter.sh
 
-For initial cluster setup, dependencies, model caching, PBS monitoring, and troubleshooting, see the Aqua guide appended below.
+# 4. Wait for conversion to finish, then submit extraction
+qstat -u "$USER"
+qsub extractor.sh
+
+# 5. Monitor
+tail -f logs/batch_out.log
+tail -f logs/batch_err.log
+
+# 6. Retrieve results to your local machine
+scp -r <username>@aqua.iitm.ac.in:~/rxn_extractor/data ./aqua_results/
+
+# 7. Flatten
+python export_csv.py
+```
+
+`markdown_converter.sh` and `extractor.sh` are the active PBS scripts. They use different CUDA module versions and runtime settings; check each script before submission. `job.sh` is a legacy combined script and is not the current workflow.
+
+For initial cluster setup, one-time dependency installation, model download, Docling caching, and PBS diagnostics, see `AQUA_RUNNING_INSTRUCTIONS.md`.
+
+---
 
 ## Aqua Running Instructions
 
-The Aqua setup and operations guide below is adapted from `AQUA_RUNNING_INSTRUCTIONS.md` to reflect the current branch workflow. The source file is unchanged; its older combined `job.sh` submission example is not presented as the current run path.
+The guide below is reproduced from `AQUA_RUNNING_INSTRUCTIONS.md`.
 
 # Running Reaction Extractor on IITM Aqua Cluster
 
@@ -328,9 +398,9 @@ python -m src.pipeline.pdf_converter
 ls -la ~/.cache/huggingface/hub/models--docling-project--docling-layout-heron/snapshots/
 ```
 
-## 6. Current PBS Workflow on This Branch
+## 6. Current PBS Workflow
 
-The current workflow uses two scripts. Submit conversion first, wait for it to complete, then submit extraction:
+The current workflow uses two separate scripts. Submit conversion first, wait for it to complete, then submit extraction:
 
 ```bash
 cd ~/rxn_extractor
@@ -340,9 +410,7 @@ qstat -u "$USER"
 qsub extractor.sh
 ```
 
-The checked-in `job.sh` is not current; the intended combined job should run the conversion stage followed by extraction in one PBS job. Check the two active scripts for their current module, library, and offline settings before submission.
-
-Place input PDFs in `~/rxn_extractor/pdfs/`. The conversion script writes Markdown to `markdowns/`; the extractor consumes that Markdown and writes result CSVs to `data/`.
+Place input PDFs in `~/rxn_extractor/pdfs/`. The conversion script writes Markdown to `markdowns/`; the extractor consumes that Markdown and writes result CSVs to `data/`. The two scripts use different CUDA module versions and runtime settings; check each script before submission.
 
 ## 7. Monitor, Cancel, and Retrieve Results
 
@@ -373,5 +441,5 @@ If `reaction.yaml` changes, rebuild generated artifacts from the project environ
 
 ```bash
 source ~/rxn_env/bin/activate
-python -m src.builder.cli --domain reaction.yaml
+python -m src.builder.cli
 ```
